@@ -131,6 +131,32 @@ def fetch_salary_from_url(url: str) -> str:
                     return ""
             else:
                 return ""
+        elif "gh_jid=" in url:
+            # Handle Greenhouse embedded jobs (e.g. mthree)
+            gh_jid_match = re.search(r'[?&]gh_jid=([0-9]+)', url)
+            if gh_jid_match:
+                response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                if response.status_code == 200:
+                    token_match = re.search(r'greenhouse\.io/embed/job_board/[^?]+\?for=([^"\'&>]+)', response.text)
+                    if token_match:
+                        board_token = token_match.group(1).strip()
+                        job_id = gh_jid_match.group(1).strip()
+                        api_url = f"https://api.greenhouse.io/v1/boards/{board_token}/jobs/{job_id}"
+                        api_res = requests.get(api_url, headers=headers, timeout=5)
+                        if api_res.status_code == 200:
+                            import html
+                            data = api_res.json()
+                            desc_html = html.unescape(data.get("content", ""))
+                            soup = BeautifulSoup(desc_html, "html.parser")
+                            text = soup.get_text(" ")
+                        else:
+                            text = ""
+                    else:
+                        text = ""
+                else:
+                    text = ""
+            else:
+                text = ""
         else:
             # 3. Standard HTML Pages (Greenhouse, Lever, Ashby, etc.)
             response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
@@ -189,9 +215,9 @@ def fetch_salary_from_url(url: str) -> str:
         if hourly_match:
             return hourly_match.group(0).strip()
 
-        # Regex 2: Context-based range with optional $ and optional USD (e.g. salary range is 116,000 - 189,750)
+        # Regex 2: Context-based range with optional $ and optional USD (e.g. salary range is 116,000 - 189,750 or Salary USD 105,500 - 213,500)
         context_match = re.search(
-            r'(?:salary|pay|compensation|scale|base)\s*(?:range|rate|pay)?\s*(?:is|of)?\s*(?:between)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)\s*(?:-|to|–|—)\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)',
+            r'(?:salary|pay|compensation|scale|base)\s*(?:range|rate|pay)?\s*(?:is|of)?\s*(?:between)?\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)\s*(?:-|to|–|—)\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)',
             text,
             re.IGNORECASE
         )
