@@ -1,0 +1,7 @@
+.DS_Store
+JobTracker/applied.db
+JobTracker/.chrome_history_temp
+JobTracker/logs/
+JobTracker/cache/
+__pycache__/
+*.pyc
