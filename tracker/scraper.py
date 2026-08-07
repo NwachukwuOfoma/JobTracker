@@ -215,9 +215,9 @@ def fetch_salary_from_url(url: str) -> str:
         if hourly_match:
             return hourly_match.group(0).strip()
 
-        # Regex 2: Context-based range with optional $ and optional USD (e.g. salary range is 116,000 - 189,750 or Salary USD 105,500 - 213,500)
+        # Regex 2: Context-based range with optional $ and optional USD (e.g. salary range is 116,000 - 189,750 or Salary: 70,880 - 106,200)
         context_match = re.search(
-            r'(?:salary|pay|compensation|scale|base)\s*(?:range|rate|pay)?\s*(?:is|of)?\s*(?:between)?\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)\s*(?:-|to|–|—)\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)',
+            r'(?:salary|pay|compensation|scale|base)\s*(?:range|rate|pay)?\s*(?::)?\s*(?:is|of)?\s*(?:between)?\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)\s*(?:-|to|–|—)\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)',
             text,
             re.IGNORECASE
         )
