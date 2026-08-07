@@ -103,6 +103,12 @@ def run_export() -> None:
     """Regenerates HTML and CSV from the current state of the database."""
     init_db()
     tracked = get_tracked_jobs()
+    interacted_map = {}
+    for job in tracked.values():
+        if job["status"] in ("applied", "skipped", "opened"):
+            key = (job["company"].lower().strip(), job["title"].lower().strip())
+            interacted_map[key] = job["status"]
+
     new_jobs = [
         {
             "company": job["company"],
@@ -112,7 +118,8 @@ def run_export() -> None:
             "category": job.get("category", "Other"),
             "salary": job.get("salary", ""),
             "age": job.get("age", ""),
-            "url": job["original_url"]
+            "url": job["original_url"],
+            "similar_status": interacted_map.get((job["company"].lower().strip(), job["title"].lower().strip()), "")
         }
         for job in tracked.values() if job["status"] == "new"
     ]
@@ -290,6 +297,12 @@ def main() -> None:
     print("==============================")
     
     # Generate/regenerate reports
+    interacted_map = {}
+    for job in updated_tracked.values():
+        if job["status"] in ("applied", "skipped", "opened"):
+            key = (job["company"].lower().strip(), job["title"].lower().strip())
+            interacted_map[key] = job["status"]
+
     new_jobs_to_export = [
         {
             "company": j["company"],
@@ -299,7 +312,8 @@ def main() -> None:
             "category": j.get("category", "Other"),
             "salary": j.get("salary", ""),
             "age": j.get("age", ""),
-            "url": j["url"]
+            "url": j["url"],
+            "similar_status": interacted_map.get((j["company"].lower().strip(), j["title"].lower().strip()), "")
         }
         for j in new_jobs_list
     ]

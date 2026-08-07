@@ -441,6 +441,19 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             align-self: flex-start;
         }}
 
+        .warning-badge {{
+            display: inline-flex;
+            align-items: center;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            color: #fbbf24;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            align-self: flex-start;
+        }}
+
         .apply-btn {{
             display: block;
             text-align: center;
@@ -753,6 +766,12 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                         const salaryBadge = job.salary ? `<span class="salary-badge">💵 ${{escapeHtml(job.salary)}}</span>` : '';
                         const ageBadge = job.age ? `<span class="age-badge">📅 ${{escapeHtml(job.age)}}</span>` : '';
                         
+                        let warningBadge = '';
+                        if (job.similar_status) {{
+                            const label = job.similar_status === 'applied' ? 'Applied' : (job.similar_status === 'skipped' ? 'Skipped' : 'Opened');
+                            warningBadge = `<span class="warning-badge" title="You previously marked a similar role at this company as ${{label}}">⚠️ Similar ${{label}}</span>`;
+                        }}
+                        
                         card.innerHTML = `
                             <div>
                                 <div class="card-header">
@@ -768,6 +787,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                                     <div class="badge-group">
                                         ${{salaryBadge}}
                                         ${{ageBadge}}
+                                        ${{warningBadge}}
                                     </div>
                                 </div>
                             </div>
