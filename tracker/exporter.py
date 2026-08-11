@@ -840,6 +840,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
         function parseSalaryValue(salaryStr) {{
             if (!salaryStr) return 0;
             let cleaned = salaryStr.toLowerCase().replace(/,/g, '');
+            // Normalize periods used as thousand separators (e.g. 81.000 -> 81000)
+            cleaned = cleaned.replace(/\.([0-9]{3})\b/g, '$1');
             // Convert abbreviations (e.g. 100k -> 100000)
             cleaned = cleaned.replace(/([0-9.]+)\s*k/g, (match, num) => parseFloat(num) * 1000);
             
@@ -848,14 +850,15 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             
             let values = numbers.map(n => parseFloat(n));
             
-            // Check if hourly and estimate yearly
-            let isHourly = cleaned.includes('hr') || cleaned.includes('hour') || values.some(v => v < 200);
+            // Check if hourly and estimate yearly. Ignore 0.
+            let isHourly = cleaned.includes('hr') || cleaned.includes('hour') || values.some(v => v > 0 && v < 200);
             if (isHourly) {{
                 values = values.map(v => v * 2000); // 2000 hours/yr
             }}
             
             return Math.max(...values);
         }}
+
 
         function filterAndSortJobs() {{
             const query = searchInput.value.toLowerCase().trim ? searchInput.value.toLowerCase().trim() : searchInput.value.toLowerCase();
