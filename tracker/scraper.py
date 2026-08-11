@@ -157,6 +157,27 @@ def fetch_salary_from_url(url: str) -> str:
                     text = ""
             else:
                 text = ""
+        elif "/careers/job/" in url:
+            # Handle Eightfold job listings (e.g. Microsoft)
+            eightfold_match = re.search(r'https?://([^/]+)/careers/job/([0-9]+)', url)
+            if eightfold_match:
+                domain, job_id = eightfold_match.groups()
+                api_url = f"https://{domain}/api/apply/v2/jobs/{job_id}"
+                api_res = requests.get(api_url, headers=headers, timeout=5)
+                if api_res.status_code == 200:
+                    data = api_res.json()
+                    desc_html = data.get("job_description", "")
+                    if desc_html:
+                        soup = BeautifulSoup(desc_html, "html.parser")
+                        text = soup.get_text(" ")
+                    else:
+                        text = ""
+                elif api_res.status_code in (400, 403, 404, 410, 422):
+                    return "__DEAD__"
+                else:
+                    text = ""
+            else:
+                text = ""
         else:
             # 3. Standard HTML Pages (Greenhouse, Lever, Ashby, etc.)
             response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
