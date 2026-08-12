@@ -187,6 +187,8 @@ def fetch_salary_from_url(url: str) -> str:
                 return ""
                 
             # Parse JSON-LD Schema if present BEFORE decomposing script tags!
+            json_ld_salary = ""
+            json_ld_desc = ""
             soup_pre = BeautifulSoup(response.text, "html.parser")
             for s in soup_pre.find_all("script", type="application/ld+json"):
                 try:
@@ -205,12 +207,20 @@ def fetch_salary_from_url(url: str) -> str:
                                     max_v = val_data.get("maxValue")
                                     unit = val_data.get("unitText", "YEAR").upper()
                                     if min_v is not None and max_v is not None:
-                                        suffix = " / hr" if "HOUR" in unit or "HR" in unit else ""
-                                        min_fmt = f"${min_v:,}" if isinstance(min_v, (int, float)) else f"${min_v}"
-                                        max_fmt = f"${max_v:,}" if isinstance(max_v, (int, float)) else f"${max_v}"
-                                        if min_fmt.endswith(".0"): min_fmt = min_fmt[:-2]
-                                        if max_fmt.endswith(".0"): max_fmt = max_fmt[:-2]
-                                        json_ld_salary = f"{min_fmt} - {max_fmt}{suffix}"
+                                        is_placeholder = False
+                                        try:
+                                            if float(min_v) == 0 and float(max_v) == 0:
+                                                is_placeholder = True
+                                        except (ValueError, TypeError):
+                                            pass
+                                        
+                                        if not is_placeholder:
+                                            suffix = " / hr" if "HOUR" in unit or "HR" in unit else ""
+                                            min_fmt = f"${min_v:,}" if isinstance(min_v, (int, float)) else f"${min_v}"
+                                            max_fmt = f"${max_v:,}" if isinstance(max_v, (int, float)) else f"${max_v}"
+                                            if min_fmt.endswith(".0"): min_fmt = min_fmt[:-2]
+                                            if max_fmt.endswith(".0"): max_fmt = max_fmt[:-2]
+                                            json_ld_salary = f"{min_fmt} - {max_fmt}{suffix}"
                             # 2. Extract description HTML for fallback text search
                             desc_html = item.get("description", "")
                             if desc_html:
@@ -222,13 +232,25 @@ def fetch_salary_from_url(url: str) -> str:
             if json_ld_salary:
                 return json_ld_salary
                 
+            # Check for iCIMS jobDescriptionConfig in raw HTML
+            icims_desc = ""
+            icims_match = re.search(r'window\.jobDescriptionConfig\s*=\s*(\{.*?\});', response.text, re.DOTALL)
+            if icims_match:
+                try:
+                    icims_data = json.loads(icims_match.group(1))
+                    desc_html = icims_data.get("job", {}).get("description", "")
+                    if desc_html:
+                        icims_desc = BeautifulSoup(desc_html, "html.parser").get_text(" ")
+                except Exception:
+                    pass
+                
             soup = BeautifulSoup(response.text, "html.parser")
             
             # Strip script/style components
             for tag in soup(["script", "style", "meta", "link", "noscript"]):
                 tag.decompose()
                 
-            text = soup.get_text(" ") + " " + json_ld_desc
+            text = soup.get_text(" ") + " " + json_ld_desc + " " + icims_desc
         
         # Look for USD salary ranges in text
         # Regex 1: Hourly ranges (e.g. $35.00 - $50.00 / hr or $60-$90 per hour)
@@ -257,10 +279,14 @@ def fetch_salary_from_url(url: str) -> str:
             val2 = clean_val(val2)
             return f"{val1} - {val2}"
 
-        # Regex 3: Standard dollar-sign numeric ranges (e.g. $67,500.00 - $112,500.00 or $ 205,000 - $ 230,000)
-        range_match = re.search(r'\$\s*[0-9,]+(?:\.[0-9]+)?\s*(?:-|to|–|—)\s*\$\s*[0-9,]+(?:\.[0-9]+)?', text)
+        # Regex 3: Standard dollar-sign numeric ranges (e.g. $67,500.00 - $112,500.00 or $80,000.00/Yr. - USD $100,000.00)
+        range_match = re.search(
+            r'(\$\s*[0-9,]+(?:\.[0-9]+)?)\s*(?:/yr|/year|/hr|/hour|usd|/yr\.)*\s*(?:-|to|–|—)\s*(?:usd)?\s*(\$\s*[0-9,]+(?:\.[0-9]+)?)',
+            text,
+            re.IGNORECASE
+        )
         if range_match:
-            return range_match.group(0).strip()
+            return f"{range_match.group(1).strip()} - {range_match.group(2).strip()}"
             
         # Regex 4: USD suffix numeric ranges (e.g. 116,000 USD - 189,750 USD)
         usd_range_match = re.search(r'\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?\s*(?:-|to|–|—)\s*\$?\s*[0-9,]+(?:\.[0-9]+)?\s*usd', text, re.IGNORECASE)
