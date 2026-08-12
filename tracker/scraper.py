@@ -231,8 +231,7 @@ def fetch_salary_from_url(url: str) -> str:
             # If we found a structured salary from JSON-LD, return it immediately!
             if json_ld_salary:
                 return json_ld_salary
-                
-            # Check for iCIMS jobDescriptionConfig in raw HTML
+                   # Check for iCIMS jobDescriptionConfig in raw HTML
             icims_desc = ""
             icims_match = re.search(r'window\.jobDescriptionConfig\s*=\s*(\{.*?\});', response.text, re.DOTALL)
             if icims_match:
@@ -246,21 +245,27 @@ def fetch_salary_from_url(url: str) -> str:
                 
             soup = BeautifulSoup(response.text, "html.parser")
             
+            # Extract meta description content before decomposing meta tags
+            meta_desc = ""
+            meta_tag = soup.find("meta", attrs={"name": "description"})
+            if meta_tag:
+                meta_desc = meta_tag.get("content", "")
+            
             # Strip script/style components
             for tag in soup(["script", "style", "meta", "link", "noscript"]):
                 tag.decompose()
                 
-            text = soup.get_text(" ") + " " + json_ld_desc + " " + icims_desc
+            text = soup.get_text(" ") + " " + json_ld_desc + " " + icims_desc + " " + meta_desc
         
         # Look for USD salary ranges in text
         # Regex 1: Hourly ranges (e.g. $35.00 - $50.00 / hr or $60-$90 per hour)
         hourly_match = re.search(r'\$\s*[0-9]+(?:\.[0-9]+)?\s*(?:-|to|–|—)\s*\$\s*[0-9]+(?:\.[0-9]+)?\s*(?:/|per)\s*(?:hr|hour)', text, re.IGNORECASE)
         if hourly_match:
             return hourly_match.group(0).strip()
-
-        # Regex 2: Context-based range with optional $ and optional USD (e.g. salary range is 116,000 - 189,750 or compensation range for this position is $69,300.00 to $158,000.00)
+ 
+        # Regex 2: Context-based range with optional $ and optional USD (e.g. salary range is 116,000 - 189,750 or Hiring Range: $74,100 to $148,300)
         context_match = re.search(
-            r'(?:salary|pay|compensation|scale|base)[^$0-9]{0,50}(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)\s*(?:/yr|/year|/hr|/hour|usd|/yr\.)*\s*(?:-|to|–|—)\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)',
+            r'(?:salary|pay|compensation|scale|base|range)[^$0-9]{0,50}(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)\s*(?:/yr|/year|/hr|/hour|usd|/yr\.)*\s*(?:-|to|–|—)\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)',
             text,
             re.IGNORECASE
         )
