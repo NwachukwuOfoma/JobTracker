@@ -5,13 +5,23 @@ from tracker.config import setup_logging
 
 logger = setup_logging()
 
-# Tracking parameters to strip
+# Tracking/Layout parameters to strip
 TRACKING_PARAMS = {
     "gh_src",
     "gh_jid",
     "gh_src_id",
     "ref",
-    "source"
+    "source",
+    "embed",
+    "iframe",
+    "widget",
+    "ref_type",
+    "click_id",
+    "shared_id",
+    "jobboard",
+    "applicant_source",
+    "apply_source",
+    "icims"
 }
 
 def normalize_url(url: str) -> str:

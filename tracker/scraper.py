@@ -178,6 +178,47 @@ def fetch_salary_from_url(url: str) -> str:
                     text = ""
             else:
                 text = ""
+        elif "careers.oracle.com" in url or "oraclecloud.com" in url or "jobsearch/job/" in url:
+            # Handle Oracle Recruiting Cloud / Candidate Experience
+            job_id_match = re.search(r'/job/([0-9]+)', url)
+            if job_id_match:
+                job_id = job_id_match.group(1)
+                response = requests.get(url, headers=headers, timeout=5)
+                if response.status_code == 200:
+                    site_number = "CX_45001"
+                    site_match = re.search(r'data-sitenumber="([^"]+)"', response.text)
+                    if site_match:
+                        site_number = site_match.group(1)
+                        
+                    host = "eeho.fa.us2.oraclecloud.com"
+                    host_match = re.search(r'https?://([a-zA-Z0-9.-]+\.oraclecloud\.com)', response.text)
+                    if host_match:
+                        host = host_match.group(1)
+                        
+                    api_url = f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions?finder=findReqs;siteNumber={site_number},keyword={job_id}&expand=requisitionList"
+                    api_res = requests.get(api_url, headers=headers, timeout=5)
+                    if api_res.status_code == 200:
+                        data = api_res.json()
+                        reqs = data.get("items", [{}])[0].get("requisitionList", [])
+                        if reqs:
+                            req = reqs[0]
+                            desc_html = " ".join([
+                                req.get("ShortDescriptionStr") or "",
+                                req.get("ExternalQualificationsStr") or "",
+                                req.get("ExternalResponsibilitiesStr") or ""
+                            ])
+                            soup = BeautifulSoup(desc_html, "html.parser")
+                            text = soup.get_text(" ")
+                        else:
+                            text = ""
+                    else:
+                        text = ""
+                elif response.status_code in (404, 410):
+                    return "__DEAD__"
+                else:
+                    text = ""
+            else:
+                text = ""
         else:
             # 3. Standard HTML Pages (Greenhouse, Lever, Ashby, etc.)
             response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
