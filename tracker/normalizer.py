@@ -54,7 +54,7 @@ def normalize_url(url: str) -> str:
         if "greenhouse.io" in netloc:
             netloc = "boards.greenhouse.io"
             
-        path = parsed.path
+        path = parsed.path.lower()
         
         # 3. Custom Rule: Strip language/locale prefix path (e.g. /en-US/, /en/, /fr-FR/)
         path = re.sub(r'^/[a-z]{2}(?:-[a-zA-Z]{2})?/', '/', path, flags=re.IGNORECASE)
