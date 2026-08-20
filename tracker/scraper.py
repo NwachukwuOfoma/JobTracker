@@ -131,7 +131,7 @@ def fetch_salary_from_url(url: str) -> str:
                     return ""
             else:
                 return ""
-        elif "gh_jid=" in url:
+        elif "gh_jid=" in url and "greenhouse.io" not in url:
             # Handle Greenhouse embedded jobs (e.g. mthree)
             gh_jid_match = re.search(r'[?&]gh_jid=([0-9]+)', url)
             if gh_jid_match:
