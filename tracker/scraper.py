@@ -147,6 +147,18 @@ def fetch_salary_from_url(url: str) -> str:
                         text = soup.get_text(" ")
                     else:
                         text = ""
+                elif "digitalocean.com" in url:
+                    # DigitalOcean custom Next.js careers page (using board token digitalocean98)
+                    api_url = f"https://api.greenhouse.io/v1/boards/digitalocean98/jobs/{job_id}"
+                    api_res = requests.get(api_url, headers=headers, timeout=5)
+                    if api_res.status_code == 200:
+                        import html
+                        data = api_res.json()
+                        desc_html = html.unescape(data.get("content", ""))
+                        soup = BeautifulSoup(desc_html, "html.parser")
+                        text = soup.get_text(" ")
+                    else:
+                        text = ""
                 else:
                     response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
                     if response.status_code == 200:
