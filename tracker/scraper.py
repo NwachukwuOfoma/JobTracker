@@ -135,26 +135,38 @@ def fetch_salary_from_url(url: str) -> str:
             # Handle Greenhouse embedded jobs (e.g. mthree)
             gh_jid_match = re.search(r'[?&]gh_jid=([0-9]+)', url)
             if gh_jid_match:
-                response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
-                if response.status_code == 200:
-                    token_match = re.search(r'greenhouse\.io/embed/job_board/[^?]+\?for=([^"\'&>]+)', response.text)
-                    if token_match:
-                        board_token = token_match.group(1).strip()
-                        job_id = gh_jid_match.group(1).strip()
-                        api_url = f"https://api.greenhouse.io/v1/boards/{board_token}/jobs/{job_id}"
-                        api_res = requests.get(api_url, headers=headers, timeout=5)
-                        if api_res.status_code == 200:
-                            import html
-                            data = api_res.json()
-                            desc_html = html.unescape(data.get("content", ""))
-                            soup = BeautifulSoup(desc_html, "html.parser")
-                            text = soup.get_text(" ")
+                job_id = gh_jid_match.group(1).strip()
+                if "sofi.com" in url:
+                    # SoFi custom WordPress careers API
+                    api_url = f"https://www.sofi.com/wp-json/api/careers/{job_id}/job/"
+                    api_res = requests.get(api_url, headers=headers, timeout=5)
+                    if api_res.status_code == 200:
+                        data = api_res.json()
+                        desc_html = data.get("content", "")
+                        soup = BeautifulSoup(desc_html, "html.parser")
+                        text = soup.get_text(" ")
+                    else:
+                        text = ""
+                else:
+                    response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                    if response.status_code == 200:
+                        token_match = re.search(r'greenhouse\.io/embed/job_board/[^?]+\?for=([^"\'&>]+)', response.text)
+                        if token_match:
+                            board_token = token_match.group(1).strip()
+                            api_url = f"https://api.greenhouse.io/v1/boards/{board_token}/jobs/{job_id}"
+                            api_res = requests.get(api_url, headers=headers, timeout=5)
+                            if api_res.status_code == 200:
+                                import html
+                                data = api_res.json()
+                                desc_html = html.unescape(data.get("content", ""))
+                                soup = BeautifulSoup(desc_html, "html.parser")
+                                text = soup.get_text(" ")
+                            else:
+                                text = ""
                         else:
                             text = ""
                     else:
                         text = ""
-                else:
-                    text = ""
             else:
                 text = ""
         elif "/careers/job/" in url:
