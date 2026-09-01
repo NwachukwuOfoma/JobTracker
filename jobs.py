@@ -135,7 +135,7 @@ def main() -> None:
     group.add_argument("--export", action="store_true", help="Regenerate HTML and CSV outputs.")
     group.add_argument("--mark-applied", action="store_true", help="Interactive prompt to mark opened jobs as applied.")
     group.add_argument("--mark-skipped", action="store_true", help="Interactive prompt to mark opened jobs as skipped.")
-    
+    parser.add_argument("--refresh", "--force-refresh", action="store_true", help="Force redownload of repository markdown files, ignoring the 6-hour cache.")
     args = parser.parse_args()
     
     # Handle status management commands directly
@@ -154,7 +154,7 @@ def main() -> None:
     
     # 1. Scrape jobs from all repositories
     print("Scraping job repositories...")
-    scraped_jobs = scrape_all_jobs()
+    scraped_jobs = scrape_all_jobs(force_refresh=args.refresh)
     total_scraped = len(scraped_jobs)
     
     # 2. Deduplicate based on normalized URLs

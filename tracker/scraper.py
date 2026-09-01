@@ -414,6 +414,7 @@ def fetch_repository_content(url: str, filename: str, force_refresh: bool = Fals
         logger.error(f"Failed to download from {url}: {e}")
         if cache_path.exists():
             logger.warning(f"Falling back to stale cache for {filename}.")
+            print(f"⚠️  Warning: Network error downloading {filename} ({e}). Using cached version.")
             with open(cache_path, "r", encoding="utf-8") as f:
                 return f.read()
         raise e
