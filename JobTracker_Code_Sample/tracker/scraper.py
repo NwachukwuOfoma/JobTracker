@@ -330,8 +330,8 @@ def fetch_salary_from_url(url: str) -> str:
         # Regex 1: Hourly ranges (e.g. $35.00 - $50.00 / hr or $60-$90 per hour)
         hourly_match = re.search(r'\$\s*[0-9]+(?:\.[0-9]+)?\s*(?:-|to|–|—)\s*\$\s*[0-9]+(?:\.[0-9]+)?\s*(?:/|per)\s*(?:hr|hour)', text, re.IGNORECASE)
         if hourly_match:
-            return re.sub(r'\s+', ' ', hourly_match.group(0).strip())
-
+            return hourly_match.group(0).strip()
+ 
         # Regex 2: Context-based range with optional $ and optional USD (e.g. salary range is 116,000 - 189,750 or Hiring Range: $74,100 to $148,300)
         context_match = re.search(
             r'(?:salary|pay|compensation|scale|base|range)[^$0-9]{0,50}(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)\s*(?:/yr|/year|/hr|/hour|usd|/yr\.)*\s*(?:-|to|–|—)\s*(?:usd)?\s*(\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?)',
@@ -351,7 +351,7 @@ def fetch_salary_from_url(url: str) -> str:
                 
             val1 = clean_val(val1)
             val2 = clean_val(val2)
-            return re.sub(r'\s+', ' ', f"{val1} - {val2}")
+            return f"{val1} - {val2}"
 
         # Regex 3: Standard dollar-sign numeric ranges (e.g. $67,500.00 - $112,500.00 or $80,000.00/Yr. - USD $100,000.00)
         range_match = re.search(
@@ -360,13 +360,12 @@ def fetch_salary_from_url(url: str) -> str:
             re.IGNORECASE
         )
         if range_match:
-            return re.sub(r'\s+', ' ', f"{range_match.group(1).strip()} - {range_match.group(2).strip()}")
+            return f"{range_match.group(1).strip()} - {range_match.group(2).strip()}"
             
         # Regex 4: USD suffix numeric ranges (e.g. 116,000 USD - 189,750 USD)
         usd_range_match = re.search(r'\$?\s*[0-9,]+(?:\.[0-9]+)?\s*(?:usd)?\s*(?:-|to|–|—)\s*\$?\s*[0-9,]+(?:\.[0-9]+)?\s*usd', text, re.IGNORECASE)
         if usd_range_match:
             val = usd_range_match.group(0).strip()
-            val = re.sub(r'\s+', ' ', val)
             if not val.startswith("$"):
                 val = f"${val}"
             return val
@@ -374,12 +373,12 @@ def fetch_salary_from_url(url: str) -> str:
         # Regex 5: Abbreviated ranges (e.g. $100k - $150k or $151.3K – $178K)
         abbrev_match = re.search(r'\$\s*[0-9]+(?:\.[0-9]+)?k\s*(?:-|to|–|—)\s*\$\s*[0-9]+(?:\.[0-9]+)?k', text, re.IGNORECASE)
         if abbrev_match:
-            return re.sub(r'\s+', ' ', abbrev_match.group(0).strip())
+            return abbrev_match.group(0).strip()
             
         # Regex 6: Single figures (e.g. $100,000)
         single_match = re.search(r'\$\s*[0-9]{2,3},[0-9]{3}(?:\.[0-9]+)?', text)
         if single_match:
-            return re.sub(r'\s+', ' ', single_match.group(0).strip()) + " (Est.)"
+            return single_match.group(0).strip() + " (Est.)"
             
     except Exception as e:
         logger.debug(f"Failed to fetch salary from external link '{url}': {e}")

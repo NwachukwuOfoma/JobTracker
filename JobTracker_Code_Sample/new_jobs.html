@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobTracker - New Graduate Opportunities</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(22, 28, 45, 0.6);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --success: #10b981;
+            --danger: #ef4444;
+            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            line-height: 1.5;
+            scroll-behavior: smooth;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-badge {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #93c5fd;
+            padding: 0.25rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Undo panel styling */
+        .undo-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .undo-btn {
+            background: rgba(52, 211, 153, 0.15);
+            border: 1px solid rgba(52, 211, 153, 0.3);
+            color: #34d399;
+            padding: 0.5rem 1.2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(8px);
+            font-family: inherit;
+        }
+
+        .undo-btn:hover {
+            background: rgba(52, 211, 153, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .undo-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            background: transparent;
+            border-color: var(--card-border);
+            color: var(--text-secondary);
+            transform: none;
+        }
+
+        /* Tabs styling */
+        .tabs-container {
+            display: flex;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 0.6rem 1.2rem;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 9999px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(12px);
+        }
+
+        .tab-btn:hover {
+            border-color: rgba(59, 130, 246, 0.4);
+            color: var(--text-primary);
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Search and Filter Panel */
+        .controls-panel {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.25rem;
+            margin-bottom: 2rem;
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 280px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .sort-select {
+            padding: 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--card-border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.95rem;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .sort-select:focus {
+            border-color: var(--accent);
+        }
+
+        /* Section navigation bar */
+        .section-nav-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 2rem;
+            background: rgba(22, 28, 45, 0.4);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 0.6rem 1rem;
+            flex-wrap: wrap;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(8px);
+        }
+
+        .section-nav-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .section-nav-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 6px;
+            padding: 0.35rem 0.75rem;
+            color: #93c5fd;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .section-nav-btn:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        /* Grouped Sections styling */
+        .repo-group {
+            background: rgba(15, 23, 42, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 20px;
+            padding: 1.75rem;
+            margin-bottom: 2.5rem;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.2);
+            scroll-margin-top: 1.5rem;
+        }
+
+        .repo-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #93c5fd;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 0.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        .category-group {
+            margin-bottom: 2rem;
+            scroll-margin-top: 2rem;
+        }
+
+        .category-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .category-title {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #34d399;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Jobs Grid */
+        .jobs-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1.25rem;
+        }
+
+        /* Card styling */
+        .job-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-shadow: var(--shadow);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s ease;
+            position: relative;
+        }
+
+        .job-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(59, 130, 246, 0.4);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .company-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--success);
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.2s, transform 0.1s;
+            opacity: 0.4;
+            margin-top: -2px;
+        }
+
+        .close-btn:hover {
+            color: var(--danger);
+            opacity: 1;
+            transform: scale(1.15);
+        }
+
+        .job-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.75rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 3.3rem;
+        }
+
+        .job-meta {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .meta-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .meta-icon {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+            opacity: 0.7;
+        }
+
+        .salary-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(16, 185, 129, 0.12);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: #34d399;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            align-self: flex-start;
+        }
+
+        .badge-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            flex-wrap: wrap;
+        }
+
+        .age-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            align-self: flex-start;
+        }
+
+        .warning-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(245, 158, 11, 0.12);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            color: #fbbf24;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            align-self: flex-start;
+        }
+
+        .apply-btn {
+            display: block;
+            text-align: center;
+            background: var(--accent);
+            color: white;
+            padding: 0.7rem;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .apply-btn:hover {
+            background: var(--accent-hover);
+        }
+
+        .apply-btn:active {
+            transform: scale(0.98);
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+            width: 100%;
+        }
+
+        @media (max-width: 768px) {
+            .controls-panel {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .search-box {
+                width: 100%;
+            }
+            .filter-group {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>JobTracker Dashboard</h1>
+            <div id="stats-container">
+                <span class="stats-badge" id="stats-badge">Loading...</span>
+            </div>
+        </header>
+
+        <div class="tabs-container">
+            <button class="tab-btn active" data-repo="all" onclick="setTab('all')">All Repositories</button>
+            <button class="tab-btn" data-repo="2027-AI-College-Jobs" onclick="setTab('2027-AI-College-Jobs')">2027 AI College Jobs</button>
+            <button class="tab-btn" data-repo="SimplifyJobs" onclick="setTab('SimplifyJobs')">SimplifyJobs</button>
+            <button class="tab-btn" data-repo="2027-SWE-College-Jobs" onclick="setTab('2027-SWE-College-Jobs')">2027 SWE College Jobs</button>
+        </div>
+
+        <div class="undo-container">
+            <button class="undo-btn" id="undo-btn" onclick="undoLastAction()" disabled>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 7v6h6M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13"/></svg>
+                Undo Last Action
+            </button>
+        </div>
+
+        <div class="controls-panel">
+            <div class="search-box">
+                <input type="text" id="search-input" placeholder="Search by company, title, or location...">
+            </div>
+            <div class="filter-group">
+                <select id="sort-select" class="sort-select">
+                    <option value="none">Latest to Oldest (Default)</option>
+                    <option value="salary-desc">Sort by Salary (High to Low)</option>
+                    <option value="salary-asc">Sort by Salary (Low to High)</option>
+                    <option value="salary-undefined">Undefined Salary</option>
+                    <option value="company">Sort by Company</option>
+                    <option value="location">Sort by Location</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="section-nav-bar" class="section-nav-container" style="display: none;">
+            <span class="section-nav-label">Toggle Sections:</span>
+            <div id="section-nav-links" style="display: flex; gap: 0.5rem; flex-wrap: wrap;"></div>
+        </div>
+
+        <div id="dashboard-content">
+            <!-- Structured groups will be dynamically rendered here -->
+        </div>
+    </div>
+
+    <script>
+        const jobs = [{"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Knowledge Graph - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "4d", "url": "https://lifeattiktok.com/search/7679156878833682693", "similar_status": ""}, {"company": "TikTok", "title": "Data Engineer Graduate - Data Platform Global Live - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "7d", "url": "https://lifeattiktok.com/search/7678120538997098805", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation Video - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "7d", "url": "https://lifeattiktok.com/search/7678145401619237173", "similar_status": ""}, {"company": "Google", "title": "Data Engineer - Google Maps", "location": "Mountain View, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$196k/yr", "age": "12d", "url": "https://www.google.com/about/careers/applications/jobs/results/72704944984990406", "similar_status": ""}, {"company": "TikTok", "title": "Data Engineer Graduate - Data Platform E-commerce - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "12d", "url": "https://lifeattiktok.com/search/7676253726624024837", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Supply Chain & Logistics - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "13d", "url": "https://lifeattiktok.com/search/7675843332462872885", "similar_status": "opened"}, {"company": "TikTok", "title": "Data Engineer Graduate - Data Platform - Global Live - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "14d", "url": "https://lifeattiktok.com/search/7675484418022181173", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Governance - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "18d", "url": "https://lifeattiktok.com/search/7674025781001062709", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Governance - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "18d", "url": "https://lifeattiktok.com/search/7674023327725373701", "similar_status": ""}, {"company": "TikTok", "title": "Data Scientist Graduate - E-Commerce Governance - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "18d", "url": "https://lifeattiktok.com/search/7674027218993154357", "similar_status": ""}, {"company": "TikTok", "title": "Data Scientist Graduate - Multimedia - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "19d", "url": "https://lifeattiktok.com/search/7673672141010815237", "similar_status": ""}, {"company": "TikTok", "title": "LLM Post-Training Engineer Graduate - Research & Product - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "19d", "url": "https://lifeattiktok.com/search/7673672141012093189", "similar_status": ""}, {"company": "TikTok", "title": "Data Scientist - PGC - TikTok", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "20d", "url": "https://lifeattiktok.com/search/7673215338318367029", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation Foundation - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "21d", "url": "https://lifeattiktok.com/search/7672880386574338309", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation Mall - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "21d", "url": "https://lifeattiktok.com/search/7672915427278457141", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation Mall - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "21d", "url": "https://lifeattiktok.com/search/7672911151560296709", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation Foundation - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "21d", "url": "https://lifeattiktok.com/search/7672882500030138629", "similar_status": ""}, {"company": "TikTok", "title": "AI Infra Engineer Graduate - Recommendation & LLM - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "22d", "url": "https://lifeattiktok.com/search/7672654026594093317", "similar_status": ""}, {"company": "TikTok", "title": "Big Data Engineer Graduate - TikTok Recommendation Architecture - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "22d", "url": "https://lifeattiktok.com/search/7672518398222387461", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - TikTok Vertical Recommendation - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "22d", "url": "https://lifeattiktok.com/search/7672532275557583157", "similar_status": ""}, {"company": "Google", "title": "Data Engineer - gTech Users and Products Engineering", "location": "Boulder, CO", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$196k/yr", "age": "26d", "url": "https://www.google.com/about/careers/applications/jobs/results/127904573342786246", "similar_status": ""}, {"company": "TikTok", "title": "Recommendation Architecture AI/ML Infrastructure Engineer Graduate - Data-Arch-TikTok Live - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "27d", "url": "https://lifeattiktok.com/search/7670876337129425205", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation Live - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670285949553707317", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation Live - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670285495593273605", "similar_status": ""}, {"company": "TikTok", "title": "LLM Post-training Engineer Graduate - Research & Product - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670285949976201477", "similar_status": ""}, {"company": "TikTok", "title": "Data Scientist Graduate - Multimedia - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670288355678177589", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation/Search Alliance - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "29d", "url": "https://lifeattiktok.com/search/7669913085331409205", "similar_status": ""}, {"company": "TikTok", "title": "Machine Learning Engineer Graduate - E-Commerce Recommendation/Search Alliance - 2027 Start", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "29d", "url": "https://lifeattiktok.com/search/7669910326745434421", "similar_status": ""}, {"company": "TikTok", "title": "General Hire Research Scientist Graduate - TikTok Recommendation - 2027 Start", "location": "San Jose, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "47d", "url": "https://lifeattiktok.com/search/7663389956951918853", "similar_status": ""}, {"company": "NVIDIA", "title": "Research Scientist - Electronic Design Automation - New College Grad 2026", "location": "Santa Clara, CA", "repository": "2027-AI-College-Jobs", "category": "FAANG", "salary": "$172k/yr", "age": "91d", "url": "https://nvidia.wd5.myworkdayjobs.com/en-US/nvidiaexternalcareersite/job/US-CA-Santa-Clara/Research-Scientist--Electronic-Design-Automation---New-College-Grad-2026_JR2012979", "similar_status": ""}, {"company": "Citadel", "title": "Quantitative Research Analyst - University Graduate - US", "location": "Miami, FL +1", "repository": "2027-AI-College-Jobs", "category": "Finance", "salary": "$338k/yr", "age": "49d", "url": "https://www.citadel.com/careers/details/quantitative-research-analyst-university-graduate-us/", "similar_status": ""}, {"company": "Citadel", "title": "Quantitative Trader: Equity Quantitative Research - University Graduate - US", "location": "New York City, NY", "repository": "2027-AI-College-Jobs", "category": "Finance", "salary": "$338k/yr", "age": "49d", "url": "https://www.citadel.com/careers/details/quantitative-trader-equity-quantitative-research-university-graduate-us/", "similar_status": ""}, {"company": "Citadel Securities", "title": "Quantitative Trader - University Graduate - US - New York", "location": "New York City, NY", "repository": "2027-AI-College-Jobs", "category": "Finance", "salary": "$338k/yr", "age": "49d", "url": "https://www.citadelsecurities.com/careers/details/quantitative-trader-university-graduate-us-new-york/", "similar_status": ""}, {"company": "Citadel Securities", "title": "Quantitative Trader - University Graduate - US - Miami", "location": "Miami, FL", "repository": "2027-AI-College-Jobs", "category": "Finance", "salary": "$338k/yr", "age": "49d", "url": "https://www.citadelsecurities.com/careers/details/quantitative-trader-university-graduate-us-miami/", "similar_status": ""}, {"company": "Five Rings", "title": "Campus Full Time 2027 - Quantitative Trader", "location": "New York City, NY", "repository": "2027-AI-College-Jobs", "category": "Finance", "salary": "$381k/yr", "age": "49d", "url": "https://job-boards.greenhouse.io/fiveringsllc/jobs/5255334008", "similar_status": ""}, {"company": "Arrowstreet Capital", "title": "Quantitative Researcher", "location": "Boston, MA", "repository": "2027-AI-College-Jobs", "category": "Finance", "salary": "$208k/yr", "age": "55d", "url": "https://arrowstreetcapital.wd5.myworkdayjobs.com/en-US/arrowstreet/job/Boston/Quantitative-Researcher_R1066-3", "similar_status": ""}, {"company": "Emory University", "title": "Data Analyst - Rollins School of Public Health", "location": "Atlanta, GA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "0d", "url": "https://staff-emory.icims.com/jobs/172728/data-analyst---rollins-school-of-public-health/job", "similar_status": "opened"}, {"company": "ERG", "title": "Environmental Data Analyst - EOH Group", "location": "Concord, MA +3", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$55,000 - $75,000", "age": "0d", "url": "https://jobs.lever.co/erg/d946c3de-cdf2-4fd1-842d-af17dfd886c0", "similar_status": ""}, {"company": "M9 Solutions", "title": "Jr. Federal AI Engineer", "location": "Ft. Belvoir, VA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$100,000 - $115,000   USD", "age": "0d", "url": "https://job-boards.greenhouse.io/m9solutions/jobs/5227236007", "similar_status": ""}, {"company": "Oak View Group", "title": "Data Analytics Coordinator - Part-Time - Benchmark International Arena", "location": "Tampa, FL", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$25.00 - $26.90", "age": "0d", "url": "https://careers-ovg.icims.com/jobs/34407/data-analytics-coordinator-%7c-part-time-%7c-benchmark-international-arena/job", "similar_status": ""}, {"company": "Apex Fintech Solutions", "title": "Data Analyst - Tax & Cost Basis", "location": "Austin, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$66,000 - $82,500", "age": "1d", "url": "https://peak6group.wd1.myworkdayjobs.com/en-US/apexfintechsolutions/job/NYC-441/Data-Analyst--Tax---Cost-Basis-_JR105122", "similar_status": ""}, {"company": "Booz Allen", "title": "Data Scientist - Junior", "location": "McLean, VA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$62,000.00 - $141,000.00", "age": "1d", "url": "https://bah.wd1.myworkdayjobs.com/en-US/bah_jobs/job/McLean-VA/Data-Scientist--Junior_R0248402", "similar_status": "opened"}, {"company": "Corpay", "title": "Data Analyst II - Vendor Success", "location": "Peachtree Corners, GA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://jobs.dayforcehcm.com/en-US/corpay/candidateportal/jobs/56510", "similar_status": ""}, {"company": "Creative Artists Agency", "title": "Jr. Data Scientist", "location": "Los Angeles, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$86,000 - $94,000", "age": "1d", "url": "https://caa.wd1.myworkdayjobs.com/en-US/careers/job/Los-Angeles-CA/Jr-Data-Scientist_JR9171", "similar_status": ""}, {"company": "DaVita Kidney Care", "title": "Data Analyst - Clinical Analytics and Reporting", "location": "Remote - Denver, CO", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$57,784.00 - $85,000.00", "age": "1d", "url": "https://davita.wd1.myworkdayjobs.com/en-US/dkc_external/job/09567---Denver-HQ-Non-CA-or-CO-Remote/Data-Analyst--Clinical-Analytics-and-Reporting_R0472175", "similar_status": ""}, {"company": "GMO", "title": "Quantitative Technology Associate - Class of 2027", "location": "Boston, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$90,000 - $100,000", "age": "1d", "url": "https://jobs.lever.co/gmo/df44f4c5-cb3f-4960-a984-5b26acc72962", "similar_status": ""}, {"company": "Gunvor", "title": "Graduate Program - Quantitative Analysis", "location": "Houston, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://gunvor.wd3.myworkdayjobs.com/en-US/gunvor_careers/job/Houston/Graduate-Program---Quantitative-Analysis_JR102791-1", "similar_status": ""}, {"company": "Iambic Therapeutics", "title": "Research Scientist I/II - Bioanalytical Sciences & Assay Development", "location": "San Diego, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$113,600 - $156,000", "age": "1d", "url": "https://jobs.ashbyhq.com/iambic-therapeutics/4a04c67c-1be5-4109-8f9f-b3e8dd818e37", "similar_status": ""}, {"company": "Integrity", "title": "Remote Data Analyst", "location": "Orange, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://integritymarketing.wd1.myworkdayjobs.com/en-US/integrity/job/Orange-CA/Remote-Data-Analyst_JR4569", "similar_status": ""}, {"company": "Jerry", "title": "Associate Data Scientist", "location": "New York City, NY +3", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$100,000 - $140,000", "age": "1d", "url": "https://jobs.ashbyhq.com/jerry.ai/4d1942ff-e7e8-4811-a887-8e4ee9e63758", "similar_status": "opened"}, {"company": "Kaizen Analytix", "title": "Data Scientist", "location": "Atlanta, GA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$60 - $60 / hr", "age": "1d", "url": "http://kaizenanalytix.applytojob.com/apply/0Lkt3mpdKK/Data-Scientist", "similar_status": ""}, {"company": "Leidos", "title": "Research Scientist I", "location": "San Antonio, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$69,550.00 - $125,725.00", "age": "1d", "url": "https://leidos.wd5.myworkdayjobs.com/en-US/external/job/San-Antonio-TX/Research-Scientist-I_R-00191115", "similar_status": ""}, {"company": "Motorola Solutions", "title": "Applied AI Engineer I - Supply Chain", "location": "Chicago, IL", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$58,500 - $85,200", "age": "1d", "url": "https://motorolasolutions.wd5.myworkdayjobs.com/en-US/careers/job/Chicago-IL/Applied-AI-Engineer-I---Supply-Chain_R67371", "similar_status": ""}, {"company": "MyFunded Futures", "title": "Junior Machine Learning Engineer", "location": "Plano, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://job-boards.greenhouse.io/myfundedfutures/jobs/4390595009", "similar_status": ""}, {"company": "Wintermute", "title": "Graduate Algorithmic Trader 2027", "location": "New York City, NY", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$210,000 (Est.)", "age": "1d", "url": "https://jobs.lever.co/wintermute-trading/d962dc39-8839-4e13-a37a-baba49e52b44", "similar_status": ""}, {"company": "Bosch", "title": "AI/ML Engineer_MS", "location": "Telengana, IN", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "2d", "url": "https://jobs.smartrecruiters.com/BoschGroup/744000146431788-ai-ml-engineer-ms?oga=true", "similar_status": ""}, {"company": "Jobgether", "title": "AI Visual Creator - Static Ads", "location": "USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "2d", "url": "https://jobs.lever.co/jobgether/d3b7757a-b974-4390-a2c2-07bf2d7b05f0", "similar_status": ""}, {"company": "Syncreon Consulting", "title": "Data Engineer with strong Snowflake & Databricks - US Citizens AND Local candidates Only - 12yrs+ overall", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "2d", "url": "https://jobs.smartrecruiters.com/SyncreonConsulting/744000146504702-data-engineer-with-strong-snowflake-databricks-us-citizens-and-local-candidates-only-12yrs-overall-?oga=true", "similar_status": ""}, {"company": "Vermeer", "title": "Data Analyst I - Operations", "location": "Pella, IA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "2d", "url": "https://vermeer.wd5.myworkdayjobs.com/en-US/externalcareersite/job/Pella-Iowa-USA---Corporate-Office/Data-Analyst-I---Operations_REQ-22099", "similar_status": ""}, {"company": "Vertex", "title": "Stem Cell Research Scientist", "location": "Boston, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$104,200 - $156,200", "age": "2d", "url": "https://vrtx.wd501.myworkdayjobs.com/en-US/vertex_careers/job/Boston-MA/Stem-Cell-Research-Scientist_REQ-29934", "similar_status": "opened"}, {"company": "Vertex", "title": "Discovery Immunology Research Scientist", "location": "Seattle, WA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$105,600 - $158,400", "age": "2d", "url": "https://vrtx.wd501.myworkdayjobs.com/en-US/vertex_careers/job/Seattle-WA/Discovery-Immunology-Research-Scientist_REQ-30004", "similar_status": ""}, {"company": "Allegion", "title": "Enterprise AI Platform Associate Apprentice", "location": "Carmel, IN", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "5d", "url": "https://allegion.wd5.myworkdayjobs.com/en-US/careers/job/Carmel-IN/Enterprise-AI-Platform-Associate-Apprentice_JR37319-1", "similar_status": ""}, {"company": "Axos Bank", "title": "AI Enablement Specialist", "location": "San Diego, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "5d", "url": "https://axos.wd5.myworkdayjobs.com/en-US/axos/job/HQ---San-Diego-CA/AI-Enablement-Specialist_JR5216", "similar_status": ""}, {"company": "Careerswift", "title": "Data Analyst - Junior / Middle", "location": "USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$65,000 - $100,000", "age": "5d", "url": "https://jobs.ashbyhq.com/careerswift.ai/a3265022-3e44-4d64-bda3-537be8ab0dd9", "similar_status": ""}, {"company": "GRAIL", "title": "Data Engineer 1 - Operational Technology - Operations #4941", "location": "Durham, NC", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$86K - $106K", "age": "5d", "url": "https://jobs.lever.co/grailbio/36b40389-6f5d-467f-b4b0-e220ca73e89d", "similar_status": ""}, {"company": "Quantiphi", "title": "Architect ML - AI Researcher", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "5d", "url": "https://quantiphi.wd1.myworkdayjobs.com/en-US/careers_at_quantiphi/job/USA---Remote/Architect-ML---AI-Researcher_JR11867", "similar_status": "skipped"}, {"company": "Vertex", "title": "Exploratory Biology Research Scientist", "location": "San Diego, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$105,600 - $158,400", "age": "5d", "url": "https://vrtx.wd501.myworkdayjobs.com/en-US/vertex_careers/job/San-Diego-CA/Exploratory-Biology-Research-Scientist_REQ-29938", "similar_status": ""}, {"company": "Citi", "title": "Functions - Quantitative Risk Management - Summer Analyst - Irving - USA - 2027", "location": "Irving, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$60,000.00 - $110,000.00", "age": "6d", "url": "https://citi.wd5.myworkdayjobs.com/en-US/2/job/Irving-Texas-United-States/Functions---Quantitative-Risk-Management--Summer-Analyst--Irving---USA--2027_26990048", "similar_status": ""}, {"company": "Citi", "title": "Functions - Quantitative Risk Management - Summer Analyst - Buffalo - USA - 2027", "location": "USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$60,000.00 - $110,000.00", "age": "6d", "url": "https://citi.wd5.myworkdayjobs.com/en-US/2/job/Getzville-New-York-United-States/Functions---Quantitative-Risk-Management--Summer-Analyst--Buffalo---USA--2027_26990039", "similar_status": ""}, {"company": "Citi", "title": "Functions - Quantitative Risk Management - Summer Analyst - Tampa - USA - 2027", "location": "Tampa, FL", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$60,000.00 - $110,000.00", "age": "6d", "url": "https://citi.wd5.myworkdayjobs.com/en-US/2/job/Tampa-Florida-United-States/Functions---Quantitative-Risk-Management--Summer-Analyst--Tampa---USA--2027_26990051", "similar_status": ""}, {"company": "ING", "title": "Junior Data Scientist", "location": "Waco, TX +1", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "6d", "url": "https://ing.wd3.myworkdayjobs.com/en-US/jvsgblcor/job/ACT-Amsterdam---Acanthus/Junior-Data-Scientist_REQ-10120426", "similar_status": ""}, {"company": "Legend Biotech", "title": "Associate CMC Process Data Analyst", "location": "Raritan, NJ", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$81,118.96 - $81,118.96   USD", "age": "6d", "url": "https://job-boards.greenhouse.io/legendcareers/jobs/4728086005", "similar_status": ""}, {"company": "LMI Innovation", "title": "Data Engineer", "location": "Fort Gregg-Adams, VA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$80,375 - $90,604", "age": "6d", "url": "https://careers-lmi.icims.com/jobs/14408/data-engineer/job", "similar_status": ""}, {"company": "True Anomaly", "title": "Data Engineer I", "location": "Denver, CO +1", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$80,000 - $110,000,", "age": "6d", "url": "https://job-boards.greenhouse.io/trueanomalyinc/jobs/5223279007", "similar_status": ""}, {"company": "Anduril", "title": "Agentic AI Engineer - Automation", "location": "Costa Mesa, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$220,000 - $292,000   USD", "age": "7d", "url": "https://boards.greenhouse.io/andurilindustries/jobs/5219383007?gh_jid=5219383007", "similar_status": ""}, {"company": "Ankura", "title": "Associate - Forensic Data & Analytics", "location": "Chicago, IL +2", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$70,00 - $90,000", "age": "7d", "url": "https://ankura.wd5.myworkdayjobs.com/en-US/ankura/job/Chicago-IL/Associate--Forensic-Data---Analytics_R104901", "similar_status": ""}, {"company": "DaVita Kidney Care", "title": "Data Analyst - Clinical Analytics and Reporting", "location": "Remote - Colorado, USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$57,784.00 - $85,000.00", "age": "7d", "url": "https://davita.wd1.myworkdayjobs.com/en-US/dkc_external/job/09507---Colorado-Remote/Data-Analyst--Clinical-Analytics-and-Reporting_R0475257", "similar_status": ""}, {"company": "Embry-Riddle Aeronautical University", "title": "Flight Scheduling Data Analyst", "location": "Prescott, AZ", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "7d", "url": "https://embryriddle.wd1.myworkdayjobs.com/en-US/external/job/Prescott-AZ/Flight-Scheduling-Data-Analyst_R311989", "similar_status": ""}, {"company": "GDIT", "title": "Human Performance Data Scientist I", "location": "USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$72,877 - $98,599", "age": "7d", "url": "https://gdit.wd5.myworkdayjobs.com/en-US/external_career_site/job/USA-FL-Hurlburt-Field---229-Cody-Ave-FLC017/Human-Performance-Data-Scientist-I_RQ210954", "similar_status": ""}, {"company": "Hughes Federal Credit Union", "title": "Data Analyst", "location": "Tucson, AZ", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$78,000.00 - $98,000.00", "age": "7d", "url": "http://hughesfcu.applytojob.com/apply/rNxdWN03G7/Data-Analyst", "similar_status": ""}, {"company": "Canon", "title": "Assoc Analyst - Data Analytics", "location": "Boca Raton, FL", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$54,460 - $81,550", "age": "8d", "url": "https://external-canoncareers.icims.com/jobs/34752/assoc-analyst%2c-data-analytics/job", "similar_status": ""}, {"company": "Emory Healthcare", "title": "Associate AI Engineer", "location": "Atlanta, GA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "8d", "url": "https://non-clinical-emory.icims.com/jobs/170743/associate-ai-engineer/job", "similar_status": ""}, {"company": "Garner Health", "title": "Data Analyst I", "location": "New York City, NY", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$88,000 - $110,000", "age": "8d", "url": "https://job-boards.greenhouse.io/garnerhealth/jobs/6144708004", "similar_status": ""}, {"company": "OpenX Technologies", "title": "Business Intelligence Data Analyst", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$93,500 - $110,000", "age": "8d", "url": "https://jobs.lever.co/openx/df23b30a-21b5-4055-9698-5b5c2767df3c", "similar_status": ""}, {"company": "P&G - Procter & Gamble", "title": "Data & AI Engineering - 2027 Grads", "location": "Cincinnati, OH", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$85,000.00 - $122,200.00", "age": "8d", "url": "https://pg.wd5.myworkdayjobs.com/en-US/1000/job/CINCINNATI-GENERAL-OFFICES/Data---AI-Engineering--2027-Grads-_R000157913", "similar_status": ""}, {"company": "P&G - Procter & Gamble", "title": "Data Science - Master\u2019s degree - 2027 Grads", "location": "Cincinnati, OH", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$85,000.00 - $122,200.00", "age": "8d", "url": "https://pg.wd5.myworkdayjobs.com/en-US/1000/job/CINCINNATI-GENERAL-OFFICES/Data-Science--Master-s-degree---2027-Grads-_R000157919", "similar_status": ""}, {"company": "Pryzm", "title": "Federal Data Analyst", "location": "Boston, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$75,000 - $90,000", "age": "8d", "url": "https://jobs.ashbyhq.com/pryzm/2c40f0bb-e559-49b3-9831-81d7484cc6dc", "similar_status": ""}, {"company": "City of Tucson", "title": "Data Analyst I", "location": "Tucson, AZ", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$24.16 - $36.24 USD", "age": "9d", "url": "https://tucsonaz.wd1.myworkdayjobs.com/en-US/tucson_talent/job/Tucson-Police-Department-Headquarters/Data-Analyst-I_JR-1003361", "similar_status": ""}, {"company": "Guidehouse", "title": "Data Analyst/FM Product Specialist - Multiple Levels", "location": "Arlington, VA +3", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://guidehouse.wd1.myworkdayjobs.com/en-US/external/job/US---VA-Arlington/Data-Analyst-FM-Product-Specialist--Multiple-Levels-_43860", "similar_status": ""}, {"company": "KBR", "title": "Data Engineer - JR", "location": "Chantilly, VA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$95,200 - $119,000", "age": "9d", "url": "https://kbr.wd5.myworkdayjobs.com/en-US/kbr_careers/job/Chantilly-Virginia/Data-Engineer--JR_R2128783", "similar_status": ""}, {"company": "Redhorse Corporation", "title": "Junior Graph Data Engineer", "location": "Arlington, VA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$85,000 - $105,000", "age": "9d", "url": "https://jobs.lever.co/redhorsecorp/7e25f5b6-1f91-47ef-8fd1-24663fa7a77b", "similar_status": ""}, {"company": "Lila Sciences", "title": "Research Scientist I/II - Computational Organic Electronics", "location": "Cambridge, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "11d", "url": "https://job-boards.greenhouse.io/lilasciences/jobs/4376824009", "similar_status": ""}, {"company": "Voya Financial", "title": "CLO Data Analyst - BLGC", "location": "Scottsdale, AZ", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$79,000 - $110,500", "age": "12d", "url": "https://godirect.wd5.myworkdayjobs.com/en-US/voya_jobs/job/Scottsdale-AZ/CLO-Data-Analyst---BLGC_JR0033085", "similar_status": ""}, {"company": "Osaic", "title": "Quantitative Analyst I", "location": "Scottsdale, AZ", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$57,750 - $77,000", "age": "13d", "url": "https://advisorgroup.wd1.myworkdayjobs.com/en-US/advisor_career_site/job/Scottsdale-AZ/Quantitative-Analyst-II_R0005112", "similar_status": ""}, {"company": "Great American Insurance Group", "title": "Junior Data Scientist", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$75,000.00 - $85,000.00", "age": "14d", "url": "https://gaig.wd1.myworkdayjobs.com/en-US/gaig_external/job/Remote-USA/Junior-Data-Scientist_R9395", "similar_status": ""}, {"company": "SpaceX", "title": "Integration & Test Engineer - AI Satellites - Starmind", "location": "Bastrop, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://boards.greenhouse.io/spacex/jobs/8727656002?gh_jid=8727656002", "similar_status": ""}, {"company": "SpaceX", "title": "Thermal Engineer - AI Satellites - Starmind", "location": "Bastrop, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://boards.greenhouse.io/spacex/jobs/8728358002?gh_jid=8728358002", "similar_status": ""}, {"company": "SpaceX", "title": "Automation and Controls Engineer - AI Satellites - Starmind", "location": "Bastrop, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://boards.greenhouse.io/spacex/jobs/8727884002?gh_jid=8727884002", "similar_status": ""}, {"company": "Hitachi", "title": "Field Service Engineer - AIS", "location": "Mount Pleasant, PA +7", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$66,000 - $82,000", "age": "15d", "url": "https://hitachi.wd1.myworkdayjobs.com/en-US/hitachi/job/Mount-Pleasant-Pennsylvania-United-States-of-America/Field-Service-Engineer---AIS_R0141202", "similar_status": ""}, {"company": "Northeastern University", "title": "Associate Research Scientist", "location": "Boston, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$67,855.00 - $95,845.00", "age": "15d", "url": "https://northeastern.wd1.myworkdayjobs.com/en-US/careers/job/Boston-MA-Main-Campus/Associate-Research-Scientist_R141382-2", "similar_status": ""}, {"company": "Fresenius Kabi", "title": "Associate Research Scientist - Cell & Gene Therapy", "location": "Lake Zurich, IL", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$95,000 - $105,000", "age": "16d", "url": "https://freseniusglobal.wd3.myworkdayjobs.com/en-US/fk_careers/job/Lake-Zurich-IL/Associate-Research-Scientist--Cell---Gene-Therapy-_R-01025944", "similar_status": ""}, {"company": "Novartis", "title": "Research Scientist - Lentiviral Vector Purification and Analytics", "location": "USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$66,800.00 - $124,000.00", "age": "16d", "url": "https://novartis.wd3.myworkdayjobs.com/en-US/novartis_careers/job/Cambridge-USA/Research-Scientist--Lentiviral-Vector-Purification-and-Analytics_REQ-10082523-1", "similar_status": ""}, {"company": "Precision AQ", "title": "Associate Research Scientist - Real World Evidence", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$66,000 - $94,000   USD", "age": "16d", "url": "https://job-boards.greenhouse.io/precisionaq/jobs/6128944004", "similar_status": ""}, {"company": "Precision Medicine Group", "title": "Associate Research Scientist - Real World Evidence", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$66,000 - $94,000   USD", "age": "16d", "url": "https://job-boards.greenhouse.io/precisionmedicinegroup/jobs/6128935004", "similar_status": ""}, {"company": "Astera Institute", "title": "Research Scientist - All-Optical Working Memory", "location": "Alameda, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$80,000 - $150,000", "age": "17d", "url": "https://jobs.ashbyhq.com/astera/600f1aad-2c27-4b82-bf6c-c171713bcd22", "similar_status": ""}, {"company": "Morgan Stanley", "title": "Junior Data Analyst", "location": "Dallas, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$80,000 (Est.)", "age": "19d", "url": "https://ms.wd5.myworkdayjobs.com/en-US/external/job/Dallas-Texas-United-States-of-America/Data-Analyst_PT-JR040220", "similar_status": ""}, {"company": "Bluesight", "title": "Associate Data Analyst", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$55,000 - $65,000", "age": "21d", "url": "https://jobs.lever.co/bluesight/0478c8b8-e41b-4506-8dfb-b924e69b563b", "similar_status": ""}, {"company": "Relay Network", "title": "Business Associate - AI Adoption & Enablement", "location": "Radnor, PA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "22d", "url": "https://boards.greenhouse.io/embed/job_app?for=relaynetwork&token=8121578&gh_jid=8121578", "similar_status": ""}, {"company": "RVO Health", "title": "Data Analyst - People Analytics", "location": "Charlotte, NC", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "25d", "url": "https://job-boards.greenhouse.io/rvohealth/jobs/4721689005", "similar_status": ""}, {"company": "Granicus", "title": "Analyst - AI Transformation & Strategic Operations", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$85,000.00 - $103,000.00", "age": "27d", "url": "https://careers-granicus.icims.com/jobs/10421/analyst%2c-ai-transformation-%26-strategic-operations/job", "similar_status": ""}, {"company": "Mastercard", "title": "Data Scientist I", "location": "Salt Lake City, UT +1", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$72,000 - $115,000 USD", "age": "27d", "url": "https://mastercard.wd1.myworkdayjobs.com/en-US/corporatecareers/job/Salt-Lake-City-Utah-Holladay/Data-Scientist-I_R-286655", "similar_status": ""}, {"company": "Deluxe", "title": "Data Scientist", "location": "New York City, NY +1", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$85,000.00 - $90,000.00", "age": "28d", "url": "https://deluxe.wd5.myworkdayjobs.com/en-US/usa_can/job/New-York-NY-USA/Data-Scientist-1_260475WD-1", "similar_status": ""}, {"company": "Huckberry", "title": "Jr. AI Process Engineer", "location": "Austin, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "41d", "url": "https://apply.workable.com/huckberry/j/605FD224D9/", "similar_status": ""}, {"company": "DaVita Kidney Care", "title": "Data Analyst - Clinical Analytics and Reporting", "location": "Remote - Denver, CO", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$57,784.00 - $85,000.00", "age": "42d", "url": "https://davita.wd1.myworkdayjobs.com/en-US/dkc_external/job/09567---Denver-HQ-Non-CA-or-CO-Remote/Data-Analyst--Clinical-Analytics-and-Reporting_R0455734", "similar_status": ""}, {"company": "Hewlett Packard Enterprise", "title": "HPE Labs - AI/ML Research Scientist III", "location": "Milpitas, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$136,500 - $276,500", "age": "51d", "url": "https://hpe.wd5.myworkdayjobs.com/en-US/jobsathpe/job/Milpitas-California-United-States-of-America/HPE-Labs---AI-ML-Research-Scientist-III_1209875-2", "similar_status": "opened"}, {"company": "Hewlett Packard Enterprise", "title": "HPE Labs - AI/ML Research Scientist III", "location": "Milpitas, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$136,500 - $276,500", "age": "51d", "url": "https://hpe.wd5.myworkdayjobs.com/en-US/acjobsite/job/Milpitas-California-United-States-of-America/HPE-Labs---AI-ML-Research-Scientist-III_1209875", "similar_status": "opened"}, {"company": "Busek", "title": "Data Analyst", "location": "Natick, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "62d", "url": "http://busek.applytojob.com/apply/lwufjJR4I4/Data-Analyst", "similar_status": ""}, {"company": "Corva", "title": "Jr. Completions Data Analyst", "location": "Houston, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "70d", "url": "https://ats.rippling.com/corva/jobs/f1e7e952-17fc-4c23-944f-8efcce4c598f", "similar_status": ""}, {"company": "GlobalFoundries", "title": "Global Tapeout and Mask Operations - Biz App and Data Engineer - 2026 New College Graduate", "location": "Austin, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$54,200.00 - $110,300.00", "age": "70d", "url": "https://globalfoundries.wd1.myworkdayjobs.com/en-US/external/job/USA---Texas---Austin/Global-Tapeout-and-Mask-Operations--Biz-App-and-Data-Engineer--2026-New-College-Graduate-_JR-2502471-1", "similar_status": ""}, {"company": "Ignite IT", "title": "Jr. AI Prompt Engineer", "location": "Ashburn, VA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "71d", "url": "https://apply.workable.com/ignite-33/j/81F38A4E63/", "similar_status": ""}, {"company": "US Ghost Adventures", "title": "AI Content Creation", "location": "Houston, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$42,000 - $42,000", "age": "75d", "url": "http://usghostadventures.applytojob.com/apply/22dcazkGTe/AI-Content-Creation", "similar_status": ""}, {"company": "Sage Ventures", "title": "Jr. Data Analyst", "location": "Pikesville, MD", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$60,000 - $80,000", "age": "78d", "url": "http://sageventures.applytojob.com/apply/fJyVKmDSSy/Jr-Data-Analyst", "similar_status": ""}, {"company": "SWBC", "title": "Data Analyst", "location": "San Antonio, TX", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "78d", "url": "https://swbc.wd1.myworkdayjobs.com/en-US/swbccareers/job/San-Antonio-TX/Data-Analyst_R0015059-1", "similar_status": ""}, {"company": "Board International", "title": "Associate AI Engineer - 6-month contract", "location": "Boston, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "91d", "url": "http://boardinternationalsa.applytojob.com/apply/LeNTy0zfun/Associate-AI-Engineer-6month-Contract", "similar_status": ""}, {"company": "Bevi", "title": "Supply Chain Data Analyst", "location": "Boston, MA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$76,585 - $94,605   USD", "age": "103d", "url": "https://job-boards.greenhouse.io/bevicareers/jobs/4255221009", "similar_status": ""}, {"company": "Apex Fintech Solutions", "title": "Data Analyst", "location": "Chicago, IL", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$74,277 - $103,500", "age": "104d", "url": "https://peak6group.wd1.myworkdayjobs.com/en-US/apexfintechsolutions/job/Chicago-IL/Data-Analyst_JR104794", "similar_status": ""}, {"company": "Home Depot", "title": "Online Data Engineer Manager", "location": "Atlanta, GA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "105d", "url": "https://homedepot.wd5.myworkdayjobs.com/en-US/careerdepot/job/STORE-SUPPORT-CENTER-ATLANTA---9090/Online-Data-Engineer-Manager_Req174407", "similar_status": ""}, {"company": "Pathward", "title": "Artificial Intelligence Analyst - I", "location": "Remote - USA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "$60,000 - $100,500", "age": "116d", "url": "https://job-boards.greenhouse.io/pathward/jobs/5992061004", "similar_status": ""}, {"company": "Hyve Solutions", "title": "Business Intelligence Data Analyst", "location": "Fremont, CA", "repository": "2027-AI-College-Jobs", "category": "Other", "salary": "", "age": "119d", "url": "https://synnex.wd5.myworkdayjobs.com/en-US/hyvecareers/job/Fremont-CA/Business-Intelligence-Data-Analyst_R49569", "similar_status": ""}, {"company": "Tebra", "title": "Software Engineer 1 - Back-End", "location": "Remote in USA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$80,500 - $92,000", "age": "0d", "url": "https://job-boards.greenhouse.io/tebra/jobs/4726985005?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Software Developer New Grad - Engagement Optimization", "location": "Laurel, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$85,000 (Est.)", "age": "1d", "url": "https://careers.jhuapl.edu/jobs/59510?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Textron", "title": "Software Engineer 1 - Electronic Systems", "location": "Hunt Valley, Cockeysville, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "1d", "url": "https://textron.taleo.net/careersection/textron/jobdetail.ftl?job=342666&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Huntington Ingalls Industries", "title": "Software Engineer 1 - CVN 21 Design", "location": "Newport News, VA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$69,000.00 - $86,000.00", "age": "1d", "url": "https://careers.huntingtoningalls.com/job/Newport-News-ENGINEER-SOFTWARE-1-Virg/1425127900/?ats=successfactors&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Huntington Ingalls Industries", "title": "Software Engineer 1 - CVN 21 Design", "location": "Newport News, VA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$69,000.00 - $86,000.00", "age": "1d", "url": "https://careers.huntingtoningalls.com/job/Newport-News-ENGINEER-SOFTWARE-1-Virg/1425126300/?ats=successfactors&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "RTX", "title": "Software Engineer 1", "location": "Cambridge, MAArlington County, Arlington, VA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$62,900 USD - $119,700 USD", "age": "1d", "url": "https://globalhr.wd5.myworkdayjobs.com/fr-CA/Private_Posting_No_TMP/job/US-VA-ARLINGTON-111--1300-17Th-St-N--BBN-ARLINGTON/Software-Engineer-I--Hybrid--Arlington--VA---Cambridge--MA_01870647?utm_source=Simplify&ref=Simplify", "similar_status": "skipped"}, {"company": "General Motors", "title": "Entry Level Software Engineer", "location": "Milford, MIWarren, MI", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "1d", "url": "https://generalmotors.wd5.myworkdayjobs.com/en-CA/Careers_GM/job/Warren-Michigan-United-States-of-America/Entry-Level-Software-Engineer_JR-202618756?utm_source=Simplify&ref=Simplify", "similar_status": "skipped"}, {"company": "RELX", "title": "Software Engineer New Grad", "location": "Alpharetta, GA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$59,200 - $98,600", "age": "2d", "url": "https://relx.wd3.myworkdayjobs.com/en-US/relx/job/Alpharetta-GA/Tech-Accelerate-Graduate-Program---Software-Engineer--Alpharetta---June-_R117626-2?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "RELX", "title": "Software Engineer New Grad", "location": "Alpharetta, GA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$59,200 - $98,600", "age": "2d", "url": "https://relx.wd3.myworkdayjobs.com/en-US/relx/job/Alpharetta-GA/Tech-Accelerate-Graduate-Program---Software-Engineer--Alpharetta---January-_R117617-1?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "LexisNexis Risk Solutions", "title": "Software Engineer New Grad", "location": "Alpharetta, GA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$59,200 - $98,600", "age": "2d", "url": "https://relx.wd3.myworkdayjobs.com/en-US/RiskSolutions/job/Alpharetta-GA/Tech-Accelerate-Graduate-Program---Software-Engineer--Alpharetta---June-_R117626-1?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "LexisNexis Risk Solutions", "title": "Software Engineer New Grad - Risk Solutions Technology Graduate Program", "location": "Boca Raton, FL", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$59,200 - $98,600", "age": "2d", "url": "https://relx.wd3.myworkdayjobs.com/en-US/RiskSolutions/job/Boca-Raton-FL/Tech-Accelerate-Graduate-Program---Software-Engineer--Boca-Raton---June-_R116023-2?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "LexisNexis Risk Solutions", "title": "Software Engineer New Grad - Risk Solutions Technology Graduate Program", "location": "Alpharetta, GA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$59,200 - $98,600", "age": "2d", "url": "https://relx.wd3.myworkdayjobs.com/en-US/RiskSolutions/job/Alpharetta-GA/Tech-Accelerate-Graduate-Program---Software-Engineer--Alpharetta---January-_R117617?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Alation", "title": "UX Software Engineer 1 - Contractor", "location": "Redwood City, CA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2d", "url": "https://alation.wd503.myworkdayjobs.com/ExternalSite/job/USA-CA-REDWOOD-CITY/UX-Software-Engineer-I--Contractor-_R10000770?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "DefenseStorm", "title": "Junior Product Engineer - Software Engineer 1", "location": "Alpharetta, GAAtlanta, GA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "4d", "url": "https://defensestorm.applytojob.com/apply/VI1cWuBKQ3/Junior-Product-Engineer-Software-Engineer-I?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Barry-Wehmiller", "title": "Entry Level Software Engineer", "location": "5 locations Eau Claire, WIDallas, TXRaleigh, NCSt. Louis, MODenver, CO", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$75,000 - $90,000", "age": "5d", "url": "https://barrywehmiller.wd1.myworkdayjobs.com/BWConfidential/job/Dallas-TX/Entry-Level-Software-Engineer_R022649?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Sierra Nevada Corporation", "title": "Software Engineer 1", "location": "Lone Tree, CODayton, OHPlano, TX", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$82,039.23 - $112,803.95", "age": "6d", "url": "https://snc.wd1.myworkdayjobs.com/snc_external_career_site/job/Lone-Tree-CO/Software-Engineer-I_R0030529?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Sierra Nevada Corporation", "title": "Software Engineer 1", "location": "Lone Tree, CODayton, OHPlano, TX", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$82,039.23 - $112,803.95", "age": "6d", "url": "https://snc.wd1.myworkdayjobs.com/snc_external_career_site/job/Lone-Tree-CO/Software-Engineer-I_R0030526?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Garmin", "title": "Software Engineer 1 - Aviation Backend Web", "location": "Olathe, KS", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "6d", "url": "https://careers.garmin.com/jobs/19142?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "True Anomaly", "title": "Software Engineer 1 New Grad - Perception", "location": "Long Beach, CADenver, CO", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$75,000 (Est.)", "age": "7d", "url": "https://job-boards.greenhouse.io/trueanomalyinc/jobs/5221970007?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Leidos", "title": "Junior Software Engineer - Intel Sector", "location": "Laurel, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$57,850.00 - $104,575.00", "age": "7d", "url": "https://leidos.wd5.myworkdayjobs.com/External/job/Laurel-MD/Junior-Software-Engineer_R-00190592?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Cox Automotive", "title": "Entry Level Software Engineer - Draper, UT", "location": "Draper, UT", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$74,000.00 - $111,000.00", "age": "7d", "url": "https://cox.wd1.myworkdayjobs.com/Cox_External_Career_Site_1/job/Draper-UT/Entry-Level-Software-Engineer--Draper--UT-_R202681804?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "True Anomaly", "title": "Software Engineer 1 New Grad - Spacecraft Simulation", "location": "Long Beach, CADenver, CO", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$75,000 (Est.)", "age": "7d", "url": "https://job-boards.greenhouse.io/trueanomalyinc/jobs/5221555007?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "SpaceX", "title": "Software Security Engineer New Grad - Software Security - Starlink", "location": "Hawthorne, CA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$140,000.00 - $175,000.00", "age": "8d", "url": "https://boards.greenhouse.io/spacex/jobs/8724316002?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "SteerBridge", "title": "Junior Software Engineer", "location": "Vienna, VA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "9d", "url": "https://jobs.lever.co/steerbridge/718b3135-d15d-4cbc-9541-1cbb8a6f5ec5/apply?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "KBR", "title": "Junior Software Engineer", "location": "7 locations King of Prussia, PAChantilly, VASan Antonio, TXClearfield, UTColumbia, MDBeavercreek, OHEl Segundo, CA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$94,300.00 - $115,200.00", "age": "9d", "url": "https://kbr.wd5.myworkdayjobs.com/KBR_Careers/job/Chantilly-Virginia/JR-Software-Engineer_R2128745?utm_source=Simplify&ref=Simplify", "similar_status": "opened"}, {"company": "True Anomaly", "title": "Software Engineer 1 New Grad - QA", "location": "Long Beach, CADenver, CO", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$70,000 (Est.)", "age": "11d", "url": "https://job-boards.greenhouse.io/trueanomalyinc/jobs/5219057007?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "General Dynamics Mission Systems", "title": "Software Engineer - Entry Level", "location": "Manassas, VA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$77,843.00 - $86,358.00", "age": "11d", "url": "https://careers-gdms.icims.com/jobs/74471/job?mobile=true&needsRedirect=false&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Astrion", "title": "Junior Software Developer - Datalinks Test Flight", "location": "Eglin AFB, FL", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "14d", "url": "https://careers.astrion.us/jobs/24705?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "WOOD Consulting Services", "title": "Software Engineer 0 - Entry-Level Software Engineering", "location": "Fort Meade, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$80,000 - $100,000", "age": "15d", "url": "https://jobs-woodcons.icims.com/jobs/14759/job?mobile=true&needsRedirect=false&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "CACI", "title": "Entry Level Software Engineer", "location": "Annapolis Junction, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$12,000 (Est.)", "age": "15d", "url": "https://jobs.smartrecruiters.com/NextCenturyCorporation/106031601?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Marlabs", "title": "Entry Level Programmer Analyst \ud83c\udf93", "location": "Piscataway, NJ", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "15d", "url": "https://jobs.smartrecruiters.com/MarlabsInc1/83216249?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "LMI", "title": "Junior Android Engineer - RFID", "location": "Remote in USA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$57,000 - $97,000", "age": "15d", "url": "https://careers-lmi.icims.com/jobs/14418/job?mobile=true&needsRedirect=false&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "General Dynamics Mission Systems", "title": "Software Engineer - Entry Level", "location": "Scottsdale, AZ", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$86,300.00 - $86,300.00", "age": "16d", "url": "https://careers-gdms.icims.com/jobs/74274/job?mobile=true&needsRedirect=false&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "University Corporation for Atmospheric Research", "title": "CESM Software Engineer 1 - Computer Engineering", "location": "Boulder, CO", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$66,707.00 USD - $83,383.00 USD", "age": "19d", "url": "https://ucar.wd5.myworkdayjobs.com/UCAR_Careers/job/Boulder-CO/CESM-Software-Engineer-I_REQ-2026-117-1?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Capital Health", "title": "Product Engineer 1", "location": "Pennington, NJ", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$78,769.60 - $102,960.00", "age": "19d", "url": "https://capitalhealth.wd1.myworkdayjobs.com/CapitalHealthCareers/job/Pennington-NJ/IT-Product-Engineer-I_JR110768?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "TikTok", "title": "Backend Software Engineer New Grad - Creator Strategy", "location": "San Jose, CA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$128000 - $256000", "age": "20d", "url": "https://lifeattiktok.com/search/7672976491146004741?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Lennar", "title": "Software Engineer 1", "location": "Miami, FLIrving, TX", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$30,000 (Est.)", "age": "20d", "url": "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Miami-FL-Job-Posting-Location/Software-Engineer-I_R26_0000003608?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "9to9 Software Solutions", "title": "Entry Level Software Developer", "location": "Copperhill, TN", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "21d", "url": "https://jobs.smartrecruiters.com/9to9SoftwareSolutionsLLC/743999677188473?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "9to9 Software Solutions", "title": "Entry Level Software Developer", "location": "Randolph AFB, TX", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "21d", "url": "https://jobs.smartrecruiters.com/9to9SoftwareSolutionsLLC/743999674053935?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Lennar Corporation", "title": "Software Engineer 1", "location": "Miami, FL", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$30,000 (Est.)", "age": "21d", "url": "https://lennar.wd1.myworkdayjobs.com/Lennar_Jobs/job/Miami-FL-Job-Posting-Location/Software-Engineer-I_R26_0000003523?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "ASSA ABLOY", "title": "Product Engineer 1", "location": "Mason City, IA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "21d", "url": "https://assaabloy.jobs2web.com/job/Mason-City-Product-Engineer-I-IA-50401/1425404233/?ats=successfactors&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Cummins", "title": "Software Engineer 1", "location": "Columbus, IN", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "23d", "url": "https://fa-espx-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/2435081?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "InterImage", "title": "Software Engineer 0", "location": "Fort Meade, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$50,000 (Est.)", "age": "26d", "url": "https://apply.workable.com/interimage/j/35ED59E021/apply?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "ByteDance", "title": "Backend Inference Runtime Engineer New Grad - AML Inference", "location": "San Jose, CA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$128000 - $256000", "age": "27d", "url": "https://jobs.bytedance.com/en/position/7669789046777940229/detail?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Textron", "title": "Software Engineer 1 - Sea Systems", "location": "Sparks, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "1mo", "url": "https://textron.taleo.net/careersection/textron/jobdetail.ftl?job=341975&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Motorola", "title": "Junior Software Engineer - AI Agent Platform", "location": "Alberta, CanadaRemote in Canada", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "1mo", "url": "https://motorolasolutions.wd5.myworkdayjobs.com/Careers/job/Ontario-Remote-Work/Junior-Software-Engineer--AI-Agent-Platform_R66146?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Palantir", "title": "Software Engineer New Grad - Defense", "location": "NYC", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2mo", "url": "https://jobs.lever.co/palantir/0a838e66-1ab0-4fc4-b4d3-4671c0352278/apply?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Palantir", "title": "Software Engineer New Grad - Defense", "location": "Palo Alto, CA", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2mo", "url": "https://jobs.lever.co/palantir/f362d7aa-360d-4059-ab38-f482742693b3/apply?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Palantir", "title": "Forward Deployed Software Engineer New Grad - Commercial", "location": "NYC", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2mo", "url": "https://jobs.lever.co/palantir/2e6b0ac8-83e9-4be5-a3aa-cf319f751728/apply?utm_source=Simplify&ref=Simplify", "similar_status": "opened"}, {"company": "Palantir", "title": "Software Engineer New Grad", "location": "Denver, CO", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2mo", "url": "https://jobs.lever.co/palantir/c34b424e-caf2-455a-b104-ae1096ccca29/apply?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Texas Sports Academy", "title": "Junior Software Engineer - AI-Forward", "location": "Austin, TX", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2mo", "url": "https://apply.workable.com/texas-sports-academy-main/j/7CA2AC17A5/apply?utm_source=Simplify&ref=Simplify", "similar_status": "opened"}, {"company": "Solerity", "title": "JavaScript Software Engineer 1 - TS/SCI with Poly", "location": "Fort Meade, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2mo", "url": "https://recruiting.paylocity.com/Recruiting/Jobs/Details/4272523?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Palantir", "title": "Forward Deployed Software Engineer New Grad", "location": "NYC", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "2mo", "url": "https://jobs.lever.co/palantir/d1ac83d0-e923-42a5-8e6d-58dd0cab25ca/apply?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "RTX", "title": "Software Engineer 1 - Test Solutions", "location": "Tucson, AZ", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$57,200 USD - $108,800 USD", "age": "4mo", "url": "https://globalhr.wd5.myworkdayjobs.com/fr-CA/Private_Posting_No_TMP/job/US-AZ-TUCSON-801--1151-E-Hermans-Rd--BLDG-801-External-Site/Software-Engineer-I----Test-Solutions---Onsite_01836492-1?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Meyer Distributing", "title": "Junior Full Stack Developer", "location": "Indianapolis, IN", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "4mo", "url": "https://recruiting.paylocity.com/Recruiting/Jobs/Details/4121413?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "KBR", "title": "Junior Software Engineer", "location": "Beavercreek, OH", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$80,000 - $100,000", "age": "4mo", "url": "https://kbr.wd5.myworkdayjobs.com/KBR_Careers/job/Beavercreek-Ohio/Junior-Software-Engineer_R2122294?utm_source=Simplify&ref=Simplify", "similar_status": "opened"}, {"company": "Berkshire Hathaway Energy", "title": "Software Engineer 1 - Automation", "location": "6 locations Salt Lake City, UTLas Vegas, NVDes Moines, IARichmond, VAReno, NVPortland, OR", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "4mo", "url": "https://fa-essf-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1/job/10004755?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "True Anomaly", "title": "Software Engineer 1 - Full Stack", "location": "Long Beach, CADenver, CO", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "5mo", "url": "https://job-boards.greenhouse.io/trueanomalyinc/jobs/5092069007?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Wyetech", "title": "Software Engineer 1", "location": "Halethorpe, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "5mo", "url": "https://jobs.lever.co/wyetechllc/63a3c4e8-35a8-45b7-8e93-b5bef6894fa7/apply?utm_source=Simplify&ref=Simplify", "similar_status": "opened"}, {"company": "North Star Staffing Solutions", "title": "Software Engineer 1", "location": "Cleveland, OH", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "6mo", "url": "https://jobs.smartrecruiters.com/NorthStarStaffingSolutions1/81064849?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "NOV", "title": "Product Engineer 1", "location": "Houston, TX", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "", "age": "6mo", "url": "https://egay.fa.us6.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_4001/job/39682?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "General Dynamics Information Technology", "title": "Junior Software Developer - Active TS/SCI with Poly Required", "location": "Annapolis Junction, MD", "repository": "SimplifyJobs-Software Engineering New Grad Roles", "category": "Software Engineering", "salary": "$85,000 - $115,000", "age": "7mo", "url": "https://gdit.wd5.myworkdayjobs.com/external_career_site/job/USA-MD-Annapolis-Junction/Junior-Software-Developer--Active-TS-SCI-with-Poly-Required-_RQ212931?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Data Analyst New Grad - Engagement Optimization", "location": "Laurel, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$85,000 (Est.)", "age": "1d", "url": "https://careers.jhuapl.edu/jobs/59507?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Siemens", "title": "Junior Software Development Engineer", "location": "Grand Prairie, TX", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$68,830 - $117,994", "age": "1d", "url": "https://siemens.avature.net/en_US/externaljobs/JobDetail/520535?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Sensor Systems/Data Analytics New Grad", "location": "Laurel, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$85,000 (Est.)", "age": "1d", "url": "https://careers.jhuapl.edu/jobs/59770?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Marathon Petroleum", "title": "Operations Research Engineer 1", "location": "Findlay, OH", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "", "age": "4d", "url": "https://mpc.wd1.myworkdayjobs.com/en-US/MPCCareers/job/Findlay-Ohio/Operations-Research-Engineer-1_00022581?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Modeler and Data Analyst New Grad \ud83c\udf93", "location": "Laurel, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$105,000 (Est.)", "age": "5d", "url": "https://careers.jhuapl.edu/jobs/59858?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Data Scientist/Engineer New Grad - Analytic Capabilities \ud83c\udf93", "location": "Laurel, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$105,000 (Est.)", "age": "7d", "url": "https://careers.jhuapl.edu/jobs/59818?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "True Anomaly", "title": "Data Science Software Engineer 1 New Grad - Data Science", "location": "Long Beach, CADenver, CO", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$75,000 (Est.)", "age": "7d", "url": "https://job-boards.greenhouse.io/trueanomalyinc/jobs/5221560007?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Software Engineering/ML/Data Scientist New Grad - Intelligence Systems \ud83c\udf93", "location": "Laurel, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$105,000 (Est.)", "age": "7d", "url": "https://careers.jhuapl.edu/jobs/59654?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Computational Geospace Modeling Research Scientist New Grad \ud83c\udf93", "location": "Laurel, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$105,000 (Est.)", "age": "8d", "url": "https://careers.jhuapl.edu/jobs/59791?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "National Software Management", "title": "Entry Level Data Analyst / Business Analyst", "location": "Jersey City, NJ", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "", "age": "12d", "url": "https://jobs.smartrecruiters.com/NationalSoftwareManagement1/744000144639269?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Datalab USA", "title": "Production Programmer \u2013 Entry Level SQL Developer", "location": "Germantown, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "", "age": "13d", "url": "https://jobs.lever.co/datalabusa/dd9a80d9-a296-4ea9-a231-b68bf268e8ea/apply?utm_source=Simplify&ref=Simplify", "similar_status": "opened"}, {"company": "Smarter Agent", "title": "Junior Data Engineer - Multiple Teams", "location": "Collingswood, NJ", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$65K - $85K", "age": "15d", "url": "https://jobs.smartrecruiters.com/SmarterAgent/743999706496509?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Wavestone", "title": "Junior AI Engineer - AI &amp; Data Team", "location": "Pittsburgh, PA", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "", "age": "18d", "url": "https://jobs.smartrecruiters.com/Wavestone1/744000143599414?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Johns Hopkins Applied Physics Laboratory", "title": "Systems Engineer/Analyst New Grad - Multi-Mission Planning Development \ud83c\udf93", "location": "Laurel, MD", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$105,000 (Est.)", "age": "19d", "url": "https://careers.jhuapl.edu/jobs/58164?icims=1&utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "LPL Financial Holdings", "title": "Data Engineering New Grad", "location": "Austin, TXFort Mill, SCCharlotte, NC", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$30.05-$50.05/hour", "age": "23d", "url": "https://lplfinancial.wd1.myworkdayjobs.com/university/job/Fort-MillCharlotte/New-Grad---2027---Data-Engineering_R-052493-1?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "ByteDance", "title": "Large Language Model Inference System Engineer New Grad - Applied Machine Learning", "location": "San Jose, CA", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$128000 - $256000", "age": "26d", "url": "https://jobs.bytedance.com/en/position/7667726338627356933/detail?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "University of Pennsylvania", "title": "Neuroimaging Data Analyst Junior", "location": "Philadelphia, PA", "repository": "SimplifyJobs-Data Science, AI & Machine Learning New Grad Roles", "category": "Data Science/AI/ML", "salary": "$26.66 - $33.00", "age": "2mo", "url": "https://upenn.wd1.myworkdayjobs.com/careers-at-penn/job/Med-Sch-Richards-Building---5th-Floor/Neuroimaging-Data-Analyst-Junior_JR00121050-1?utm_source=Simplify&ref=Simplify", "similar_status": ""}, {"company": "Amazon", "title": "Front End Engineer - IAM Console Team", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$186k/yr", "age": "1d", "url": "https://www.amazon.jobs/jobs/10524274/apply", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - TikTok Search Data Infra - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "13d", "url": "https://lifeattiktok.com/search/7675829388634392837", "similar_status": ""}, {"company": "Google", "title": "Security Engineer II - Hybrid Cloud Guidelines", "location": "Seattle, WA +3", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$196k/yr", "age": "14d", "url": "https://www.google.com/about/careers/applications/jobs/results/101300536594047686", "similar_status": ""}, {"company": "Roblox", "title": "Software Engineer - Foundation AI", "location": "San Mateo, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$150k/yr", "age": "15d", "url": "https://careers.roblox.com/jobs/8123004?gh_jid=8123004", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Foundation Platform - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "19d", "url": "https://lifeattiktok.com/search/7673674252889246005", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Media Engine - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "19d", "url": "https://lifeattiktok.com/search/7673667938889009461", "similar_status": ""}, {"company": "TikTok", "title": "Backend Software Engineer Graduate - Creation Platform - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "19d", "url": "https://lifeattiktok.com/search/7673669198965278981", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Video-on-Demand Algorithm - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "19d", "url": "https://lifeattiktok.com/search/7673674249270839557", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Ads Infra - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "20d", "url": "https://lifeattiktok.com/search/7673409179353139461", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Recommendation Infrastructure - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "20d", "url": "https://lifeattiktok.com/search/7673284715407886597", "similar_status": ""}, {"company": "TikTok", "title": "Backend Engineer Graduate - TikTok Vertical Recommendation Architecture - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "22d", "url": "https://lifeattiktok.com/search/7672532801686571317", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - TikTok AI Search & Visual Search Infra Team - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "22d", "url": "https://lifeattiktok.com/search/7672517471946000645", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Recommendation Architecture - Feeds Infrastructure - 2027 Start", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "22d", "url": "https://lifeattiktok.com/search/7672530785573980421", "similar_status": ""}, {"company": "TikTok", "title": "Site Reliability Engineer - Multiple Positions", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "22d", "url": "https://lifeattiktok.com/search/7672559124790102277", "similar_status": ""}, {"company": "Amazon", "title": "Software Development Engineer - Android", "location": "Cambridge, MA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$186k/yr", "age": "28d", "url": "https://www.amazon.jobs/jobs/10501178/apply", "similar_status": "opened"}, {"company": "TikTok", "title": "Software Engineer Graduate - Foundation Platform - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670276769459456309", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Video-on-Demand Algorithm - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670282906426476853", "similar_status": ""}, {"company": "TikTok", "title": "Backend Software Engineer Graduate - Creation Platform - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670292836050422021", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Media Engine - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670367152357673221", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Global E-commerce-Search - 2027 Start", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "28d", "url": "https://lifeattiktok.com/search/7670558992960358661", "similar_status": ""}, {"company": "TikTok", "title": "Software Development Engineer Graduate - TikTok - Testing - Growth - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "29d", "url": "https://lifeattiktok.com/search/7669957922422507781", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Data Arch - E-commerce - 2027 Start", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "33d", "url": "https://lifeattiktok.com/search/7668582086900680965", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Data Arch - E-commerce - 2027 Start", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "33d", "url": "https://lifeattiktok.com/search/7668582542044072245", "similar_status": ""}, {"company": "TikTok", "title": "Software Engineer Graduate - Global CRM - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "33d", "url": "https://lifeattiktok.com/search/7668554579301124357", "similar_status": ""}, {"company": "TikTok", "title": "Backend Software Engineer Graduate - Risk & Response - 2027 Start", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "48d", "url": "https://lifeattiktok.com/search/7663032057264244997", "similar_status": ""}, {"company": "TikTok", "title": "Backend Software Engineer Graduate - Business Governance - 2027 Start", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "48d", "url": "https://lifeattiktok.com/search/7663042453461600517", "similar_status": ""}, {"company": "TikTok", "title": "Backend Software Engineer Graduate - Machine Moderation Platform - 2027 Start", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "FAANG", "salary": "$202k/yr", "age": "48d", "url": "https://lifeattiktok.com/search/7663036950303050037", "similar_status": ""}, {"company": "Belvedere Trading", "title": "Software Engineer - Entry Level 2027", "location": "Chicago, IL", "repository": "2027-SWE-College-Jobs", "category": "Finance", "salary": "$180k/yr", "age": "28d", "url": "https://jobs.lever.co/belvederetrading/2f6480e5-7bf1-4c41-b3b5-3c7404d95b5f", "similar_status": ""}, {"company": "Accenture Federal Services", "title": "Associate Software Engineer-Hire-to-Train Program - Pega", "location": "Arlington, VA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$64,000 - $124,200", "age": "0d", "url": "https://boards.greenhouse.io/accenturefederalservices/jobs/4710190006?gh_jid=4710190006", "similar_status": ""}, {"company": "Axon", "title": "Embedded Technical Account Manager - Suffolk County", "location": "New York City, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$52,500 - $84,000   USD", "age": "0d", "url": "https://job-boards.greenhouse.io/axon/jobs/7963765003", "similar_status": ""}, {"company": "BCMC", "title": "Junior ServiceNow Developer", "location": "Falls Church, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "0d", "url": "http://bcmcllc.applytojob.com/apply/ovjISFxx3H/Junior-ServiceNow-Developer", "similar_status": ""}, {"company": "Climavision", "title": "Jr. Software Engineer", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$75,000 - $90,000", "age": "0d", "url": "https://climavision.breezy.hr/p/85938efae74c-jr-software-engineer", "similar_status": ""}, {"company": "Kobie", "title": "Marketing Operations Developer", "location": "St. Petersburg, FL +6", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "0d", "url": "https://jobs.lever.co/kobie/38a12ba2-528b-4a16-b417-25bada318899", "similar_status": ""}, {"company": "Nationwide", "title": "Engineer - Software Engineer - Full Stack", "location": "Ohio, USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$60,900.00 - $113,300.00", "age": "0d", "url": "https://nationwide.wd1.myworkdayjobs.com/en-US/nationwide_career/job/Ohio---Columbus-Three-Nationwide-Plaza/Engineer--Software-Engineer--Full-Stack-_100006", "similar_status": ""}, {"company": "PagerDuty", "title": "Site Reliability Engineer I", "location": "Atlanta, GA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$98,000 - $148,500", "age": "0d", "url": "https://job-boards.greenhouse.io/pagerduty/jobs/6162484004", "similar_status": ""}, {"company": "PTC", "title": "Cloud Services Ops - Associate Engineer", "location": "Remote - Uniontown, PA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$55,000 - $65,000", "age": "0d", "url": "https://ptc.wd1.myworkdayjobs.com/en-US/ptc/job/Remote-USA/Cloud-Services-Ops--Associate-Engineer_JR112675-1", "similar_status": ""}, {"company": "Syncreon Consulting", "title": "PL/SQL Developer - E&U- Experience", "location": "Dallas, TX", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "0d", "url": "https://jobs.smartrecruiters.com/SyncreonConsulting/744000146776292-pl-sql-developer-e-u-experience-?oga=true", "similar_status": ""}, {"company": "Syncreon Consulting", "title": "Mainframe Developer - ACH and CA7 experience is mandatory", "location": "Buffalo, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "0d", "url": "https://jobs.smartrecruiters.com/SyncreonConsulting/744000146812081-mainframe-developer-ach-and-ca7-experience-is-mandatory?oga=true", "similar_status": ""}, {"company": "Valon Tech", "title": "Software Engineer New Grad", "location": "New York City, NY +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$135,000 - $160,000", "age": "0d", "url": "https://jobs.ashbyhq.com/valon/e08ad09a-4408-4210-8c1b-da6510f83324", "similar_status": ""}, {"company": "AeroVironment", "title": "Entry-Level Software Engineer", "location": "Austin, TX", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$68,000 - $119,000", "age": "1d", "url": "https://avav.wd1.myworkdayjobs.com/en-US/avav/job/Austin-TX/Entry-Level-Software-Engineer_8600", "similar_status": "opened"}, {"company": "Applied Materials", "title": "Algorithm Developer I New College Grad- Bachelor's - Santa Clara - CA", "location": "Santa Clara, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$0.00 - $0.00", "age": "1d", "url": "https://amat.wd1.myworkdayjobs.com/en-US/external/job/Santa-ClaraCA/Algorithm-Developer-I-New-College-Grad--Bachelor-s--Santa-Clara--CA-_R2626605", "similar_status": ""}, {"company": "Boeing", "title": "Software Engineer - Associate or Experienced", "location": "Seal Beach, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$106,250 - $143,750", "age": "1d", "url": "https://boeing.wd1.myworkdayjobs.com/en-US/external_careers/job/USA---Seal-Beach-CA/Software-Engineer--Associate-or-Experienced-_JR2026520956-1", "similar_status": ""}, {"company": "Boeing", "title": "Software Engineer - Associate or Experienced", "location": "Seal Beach, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$106,250 - $143,750", "age": "1d", "url": "https://boeing.wd1.myworkdayjobs.com/en-US/external_subsidiary/job/USA---Seal-Beach-CA/Software-Engineer--Associate-or-Experienced-_JR2026520956", "similar_status": ""}, {"company": "Booz Allen", "title": "Software Developer", "location": "Suffolk, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$61,900.00 - $141,000.00", "age": "1d", "url": "https://bah.wd1.myworkdayjobs.com/en-US/bah_jobs/job/Suffolk-VA/Software-Developer_R0248463", "similar_status": ""}, {"company": "CACI", "title": "Software Engineer", "location": "Lisle, IL", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$63,800 - $127,500 USD", "age": "1d", "url": "https://caci.wd1.myworkdayjobs.com/en-US/external/job/Lisle-IL-US/Software-Engineer_331374", "similar_status": ""}, {"company": "Ciena", "title": "WaveLogic Software Developer - New Grad", "location": "Atlanta, GA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$68,900 - $110,100", "age": "1d", "url": "https://ciena.wd5.myworkdayjobs.com/en-US/careers/job/Atlanta/WaveLogic-Software-Developer---New-Grad_R031608", "similar_status": ""}, {"company": "Clearwater Analytics", "title": "Software Development Engineer I", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$105,000.00 - $120,000.00", "age": "1d", "url": "https://clearwateranalytics.wd1.myworkdayjobs.com/en-US/clearwater_analytics_careers/job/Office---Seattle/Software-Development-Engineer-I_R12047", "similar_status": ""}, {"company": "Clearwater Analytics", "title": "Quantitative Developer I", "location": "New York City, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$105,000.00 - $120,000.00", "age": "1d", "url": "https://clearwateranalytics.wd1.myworkdayjobs.com/en-US/clearwater_analytics_careers/job/Office---New-York/Quantitative-Developer-I_R12045", "similar_status": ""}, {"company": "Clearwater Analytics", "title": "Quantitative Developer I", "location": "New York City, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$105,000.00 - $120,000.00", "age": "1d", "url": "https://clearwateranalytics.wd1.myworkdayjobs.com/en-US/clearwater_analytics_careers/job/Office---New-York/Quantitative-Developer-I_R12046", "similar_status": ""}, {"company": "General Dynamics Mission Systems", "title": "Software Engineer - Entry Level", "location": "Pittsfield, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$85,807.00 - $95,193.00", "age": "1d", "url": "https://careers-gdms.icims.com/jobs/74682/software-engineer-%e2%80%93-entry-level/job", "similar_status": ""}, {"company": "General Motors", "title": "Entry Level Software Quality & Testing Engineer", "location": "Milford, MI +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://generalmotors.wd5.myworkdayjobs.com/en-US/careers_gm/job/Milford-Michigan-United-States-of-America/Entry-Level-Software-Quality---Testing-Engineer_JR-202619105", "similar_status": ""}, {"company": "General Motors", "title": "Entry Level Software Engineer", "location": "Milford, MI +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://generalmotors.wd5.myworkdayjobs.com/en-US/careers_gm/job/Milford-Michigan-United-States-of-America/Entry-Level-Software-Engineer_JR-202618501", "similar_status": "skipped"}, {"company": "Harris Computer", "title": "Associate AI Assisted Software Developer", "location": "Remote - Idaho, USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$65,000 - $75,000 USD", "age": "1d", "url": "https://harriscomputer.wd3.myworkdayjobs.com/en-US/1/job/Remote---Idaho/Associate-AI-Assisted-Software-Developer_R0046480-2", "similar_status": ""}, {"company": "Home Depot", "title": "Software Engineer II - Reliability Engineering Tooling - Remote", "location": "Remote - Georgia, USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$90,000.00 - $150,000.00", "age": "1d", "url": "https://homedepot.wd5.myworkdayjobs.com/en-US/careerdepot/job/GEORGIA---VIRTUAL---GA01/Software-Engineer-II---Reliability-Engineering-Tooling--Remote-_Req192135", "similar_status": ""}, {"company": "KLA", "title": "Software Engineer", "location": "Milpitas, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$114,800.00 - $195,200.00", "age": "1d", "url": "https://kla.wd1.myworkdayjobs.com/en-US/ur/job/Milpitas-CA/Software-Engineer_2640196", "similar_status": "opened"}, {"company": "LexisNexis", "title": "Software Engineer II", "location": "Raleigh, NC", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$71,600 - $119,400", "age": "1d", "url": "https://relx.wd3.myworkdayjobs.com/en-US/lexisnexislegal/job/Raleigh-NC/Software-Engineer-II_R117664", "similar_status": ""}, {"company": "Marathon Petroleum", "title": "Associate Software Engineer", "location": "San Antonio, TX +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://mpc.wd1.myworkdayjobs.com/en-US/mpccareers/job/San-Antonio-Texas/Associate-Software-Engineer_00023623", "similar_status": ""}, {"company": "Northrop Grumman", "title": "Northrop Grumman - SkillBridge Java Software Engineer Level 1 or 2", "location": "Remote - Aurora, CO +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$76,200.00 - $114,400.00", "age": "1d", "url": "https://ngc.wd1.myworkdayjobs.com/en-US/northrop_grumman_external_site/job/United-States-Colorado-Aurora/Northrop-Grumman--SkillBridge--Java-Software-Engineer-Level-1-or-2_R10248772", "similar_status": ""}, {"company": "PepsiCo", "title": "SWE & App Arch Engineer", "location": "New York City, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$79,800 - $136,100", "age": "1d", "url": "https://uscareers-pepsico.icims.com/jobs/468396/swe-%26-app-arch-engineer/job", "similar_status": ""}, {"company": "Peraton", "title": "Cyber Software Engineering - Associate - Annapolis Junction - MD", "location": "Annapolis Junction, MD", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$80,000 - $128,000", "age": "1d", "url": "https://careers-peraton.icims.com/jobs/170237/cyber-software-engineering%2c-associate---annapolis-junction%2c-md/job", "similar_status": ""}, {"company": "Plaid", "title": "Software Engineer - Backend", "location": "Seattle, WA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$176,400 - $226,800", "age": "1d", "url": "https://jobs.ashbyhq.com/plaid/664df3be-6be0-432f-8a35-ec7af986fd0d", "similar_status": "opened"}, {"company": "Raytheon", "title": "Software Engineer I - Onsite", "location": "Cedar Rapids, IA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$57,200 USD - $108,800 USD", "age": "1d", "url": "https://globalhr.wd5.myworkdayjobs.com/en-US/rec_rtx_ext_gateway/job/US-IA-CEDAR-RAPIDS-105--400-Collins-Rd-NE--BLDG-105/Software-Engineer-I--Onsite-_01867125-1", "similar_status": "skipped"}, {"company": "Space Dynamics Laboratory", "title": "Software Engineer", "location": "North Logan, UT", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$70,000 - $105,000", "age": "1d", "url": "http://spacedynamicslaboratory.applytojob.com/apply/bpQKRcIwMJ/Software-Engineer", "similar_status": ""}, {"company": "TJX", "title": "Retail Front End Manager", "location": "Orem, UT", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$14.50 to $15.00 per hour", "age": "1d", "url": "https://tjx.wd1.myworkdayjobs.com/en-US/tjx_external/job/Orem-UT-84058/Retail-Front-End-Manager_REQ152326", "similar_status": ""}, {"company": "Vermeer", "title": "Engineer I - Embedded Software Engineer - Engineering Development Program 2027", "location": "Pella, IA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "1d", "url": "https://vermeer.wd5.myworkdayjobs.com/en-US/externalcareersite/job/Pella-Iowa-USA---Plant-7--West-Segment-Office/Engineer-I---Embedded-Software-Engineer--Engineering-Development-Program-2027-_REQ-22180", "similar_status": ""}, {"company": "Zoox", "title": "Embedded Software Engineer - Drive Systems", "location": "Foster City, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$137,000 - $207,000", "age": "1d", "url": "https://jobs.lever.co/zoox/ea3fbfaf-588b-434a-9a5a-c61edc731a40", "similar_status": ""}, {"company": "Avalore", "title": "Site Reliability Engineer", "location": "Arlington, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$107,000 - $220,000", "age": "2d", "url": "https://apply.workable.com/avalore/j/F21E77744E/", "similar_status": ""}, {"company": "Avalore", "title": "Cloud Engineer", "location": "Arlington, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$107,000 - $220,000", "age": "2d", "url": "https://apply.workable.com/avalore/j/E1FC5D9DD1/", "similar_status": ""}, {"company": "Avalore", "title": "Support Systems Developer/Engineer", "location": "Arlington, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$107,000 - $220,000", "age": "2d", "url": "https://apply.workable.com/avalore/j/60903E3667/", "similar_status": ""}, {"company": "Booz Allen", "title": "C++ Software Engineer - Junior", "location": "Beavercreek, OH", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$55,200.00 - $126,000.00", "age": "2d", "url": "https://bah.wd1.myworkdayjobs.com/en-US/bah_jobs/job/Beavercreek-OH/C---Software-Engineer--Junior_R0240412", "similar_status": "opened"}, {"company": "CDK Global", "title": "Associate Software Engineer", "location": "Austin, TX +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$70,000 - $85,000", "age": "2d", "url": "https://cdk.wd1.myworkdayjobs.com/en-US/cdk/job/Austin-TX-USA/Associate-Software-Engineer_JR9201-1", "similar_status": ""}, {"company": "City of Philadelphia", "title": "Junior Cloud Engineer", "location": "Philadelphia, PA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$70k-$75k", "age": "2d", "url": "https://jobs.smartrecruiters.com/CityofPhiladelphia/744000146469759-junior-cloud-engineer?oga=true", "similar_status": ""}, {"company": "Guidehouse", "title": "Salesforce Developer", "location": "Remote - USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$68,000.00 - $113,000.00", "age": "2d", "url": "https://guidehouse.wd1.myworkdayjobs.com/en-US/external/job/US---Remote-Any-location/Salesforce-Developer_43774-1", "similar_status": ""}, {"company": "Leidos", "title": "Junior DevOps Engineer", "location": "Chantilly, VA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$69,550.00 - $125,725.00", "age": "2d", "url": "https://leidos.wd5.myworkdayjobs.com/en-US/external/job/Chantilly-VA/Junior-DevOps-Engineer_R-00190855", "similar_status": "opened"}, {"company": "OmegaHires", "title": "Java Python AI Developer", "location": "Phoenix, AZ", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$50 - $70", "age": "2d", "url": "http://omegahires.applytojob.com/apply/aDHPuh97BW/Java-Python-AI-Developer", "similar_status": ""}, {"company": "OmegaHires", "title": "Java Springboot Python AI FS Developer", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$50 - $70", "age": "2d", "url": "http://omegahires.applytojob.com/apply/Oj9Hboc7Zk/Java-Springboot-Python-AI-FS-Developer", "similar_status": ""}, {"company": "Precisely", "title": "Associate software Engineer - Python AI", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "2d", "url": "https://www.precisely.com/careers-and-culture/us-jobs/job/4722721005?gh_jid=4722721005", "similar_status": ""}, {"company": "RELX", "title": "Tech Accelerate Graduate Program - Software Engineer - Boca Raton - June", "location": "Boca Raton, FL", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$59,200 - $98,600", "age": "2d", "url": "https://relx.wd3.myworkdayjobs.com/en-US/relx/job/Boca-Raton-FL/Tech-Accelerate-Graduate-Program---Software-Engineer--Boca-Raton---June-_R116023", "similar_status": ""}, {"company": "SpaceX", "title": "Software Engineer - HITL - Top Secret Clearance", "location": "Hawthorne, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$125,000.00 - $160,000.00", "age": "2d", "url": "https://boards.greenhouse.io/spacex/jobs/8749210002?gh_jid=8749210002", "similar_status": ""}, {"company": "TD Bank", "title": "2027 Summer Analyst - Software Engineering Rotational Program - New York City", "location": "New York City, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "2d", "url": "https://td.wd3.myworkdayjobs.com/en-US/td_bank_careers/job/New-York-New-York/XMLNAME-2027-Summer-Analyst---Software-Engineering-Rotational-Program--New-York-City-_R_1508053", "similar_status": ""}, {"company": "Anduril", "title": "Embedded Firmware Engineer - Connected Warfare", "location": "Costa Mesa, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$166,000 - $220,000   USD", "age": "4d", "url": "https://boards.greenhouse.io/andurilindustries/jobs/5225618007?gh_jid=5225618007", "similar_status": ""}, {"company": "SharkNinja", "title": "Associate Product Developer - Corded/Cordless", "location": "Needham, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$56,300 - $80,000   USD", "age": "4d", "url": "https://job-boards.greenhouse.io/sharkninjaoperatingllc/jobs/4707165006", "similar_status": ""}, {"company": "Choice Hotels", "title": "Software Engineer 1 - Guest & Loyalty Domain", "location": "Scottsdale, AZ", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "5d", "url": "https://choicehotels.wd5.myworkdayjobs.com/en-US/external/job/Scottsdale-AZ---Technology--Digital-Commerce-Center/Software-Engineer-1_R22196", "similar_status": ""}, {"company": "Hewlett Packard Enterprise", "title": "Firmware Engineer Graduate", "location": "Spring, TX +9", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$75,700 - $143,900", "age": "5d", "url": "https://hpe.wd5.myworkdayjobs.com/en-US/jobsathpe/job/Spring-Texas-United-States-of-America/Firmware-Engineer-Graduate_1213626-1", "similar_status": ""}, {"company": "Anatomage", "title": "3D Software Junior Developer", "location": "Santa Clara, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "6d", "url": "https://apply.workable.com/anatomage/j/9E0E93FEFF/", "similar_status": ""}, {"company": "Delta Solutions & Strategies", "title": "Junior Software Engineer", "location": "Colorado Springs, CO", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$70,000 - $90,000", "age": "6d", "url": "https://jobs.lever.co/deltasands/78ed860f-7c69-4888-9a05-e8c9006be291", "similar_status": ""}, {"company": "Ontic", "title": "Associate Software Engineer - Full Stack", "location": "Austin, TX", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$80,000 - $100,000", "age": "6d", "url": "https://jobs.ashbyhq.com/ontic/d50b6bea-876f-43fc-afb9-716efe9eca02", "similar_status": ""}, {"company": "Team Cymru", "title": "Cloud Engineer", "location": "Lake Mary, FL", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "6d", "url": "http://teamcymru.applytojob.com/apply/Uw75Wk8CMs/Cloud-Engineer", "similar_status": ""}, {"company": "Valnet Tech Sites", "title": "Android Police - News Writer", "location": "Boston, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "6d", "url": "http://valnettech.applytojob.com/apply/sPZhxG3fhX/Android-Police-News-Writer", "similar_status": ""}, {"company": "Allocore", "title": "Junior Cloud Operations Engineer", "location": "Mechanicsburg, PA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "7d", "url": "http://summittechnologygroup.applytojob.com/apply/vlDJqGdRAc/Junior-Cloud-Operations-Engineer", "similar_status": ""}, {"company": "BlueCross BlueShield of Tennessee", "title": "Cloud Engineer", "location": "Remote - Chattanooga, TN", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "7d", "url": "https://bcbst.wd1.myworkdayjobs.com/en-US/external/job/USA-TN-Chattanooga-Remote/Data-Engineer_R-50971", "similar_status": ""}, {"company": "General Dynamics Mission Systems", "title": "Software Engineer - Entry Level for Crypto and Cross Domain Solutions", "location": "Scottsdale, AZ", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$77,843.00 - $86,358.00", "age": "7d", "url": "https://careers-gdms.icims.com/jobs/74514/software-engineer-%e2%80%93-entry-level-for-crypto-and-cross-domain-solutions/job", "similar_status": ""}, {"company": "Thermo Fisher Scientific", "title": "Embedded Controls Engineer", "location": "Marietta, OH", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "7d", "url": "https://thermofisher.wd5.myworkdayjobs.com/en-US/thermofishercareers/job/Marietta-Ohio-USA/Embedded-Controls-Engineer_R-01364234", "similar_status": ""}, {"company": "True Anomaly", "title": "Flight Software Engineer I - New Grad", "location": "Denver, CO +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$75,000 (Est.)", "age": "7d", "url": "https://job-boards.greenhouse.io/trueanomalyinc/jobs/5221572007", "similar_status": ""}, {"company": "WellSky", "title": "Associate Software Engineer - DevOps Engineer", "location": "Overland Park, KS", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "7d", "url": "https://wellsky.wd1.myworkdayjobs.com/en-US/wellskycareers/job/Overland-Park-KS/Associate-Software-Engineer---DevOps-Engineer_JR5080", "similar_status": ""}, {"company": "Alarm.com", "title": "Embedded Software Engineer I", "location": "Tysons, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$90,000 - $100,000   USD", "age": "8d", "url": "https://job-boards.greenhouse.io/alarmcom/jobs/8622530002", "similar_status": ""}, {"company": "Metron", "title": "Associate Software Engineer", "location": "Reston, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$2 - $20", "age": "8d", "url": "https://job-boards.greenhouse.io/metron/jobs/5211456007", "similar_status": ""}, {"company": "Caris Life Sciences", "title": "Associate Software Engineer", "location": "Irving, TX", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://carislifesciences.wd12.myworkdayjobs.com/en-US/cls/job/Irving-TX---75039/Associate-Software-Engineer_JR105464", "similar_status": ""}, {"company": "Choice Hotels", "title": "Software Engineer 1 - Mobile Apps - Kotlin exposure required", "location": "Scottsdale, AZ", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://choicehotels.wd5.myworkdayjobs.com/en-US/external/job/Scottsdale-AZ---Technology--Digital-Commerce-Center/Software-Engineer-1--Mobile-Apps---Kotlin-exposure-required_R22195", "similar_status": ""}, {"company": "General Dynamics Mission Systems", "title": "Entry Level Software Systems Engineer", "location": "Manassas, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$77,843.00 - $86,358.00", "age": "9d", "url": "https://careers-gdms.icims.com/jobs/74522/entry-level-software-systems-engineer/job", "similar_status": "opened"}, {"company": "Nightwing", "title": "Dev Ops Engineer", "location": "Sterling, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$77,000 - $163,000", "age": "9d", "url": "https://nwis.wd12.myworkdayjobs.com/en-US/nw/job/Sterling-VA/Dev-Ops-Engineer_JR102017", "similar_status": ""}, {"company": "P&G - Procter & Gamble", "title": "IT Engineering - Software - Platform - & Network - 2027 Grads", "location": "Cincinnati, OH", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$85,000.00 - $122,200.00", "age": "9d", "url": "https://pg.wd5.myworkdayjobs.com/en-US/1000/job/CINCINNATI-GENERAL-OFFICES/IT-Engineering--Software--Platform----Network----2027-Grads-_R000157918", "similar_status": ""}, {"company": "Power Digital", "title": "Junior Software Engineer", "location": "Remote - USA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://job-boards.greenhouse.io/powerdigitalmarketing/jobs/5219853007", "similar_status": ""}, {"company": "Power Digital", "title": "Junior Software Engineer", "location": "Remote - USA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://job-boards.greenhouse.io/powerdigitalmarketing/jobs/5216069007", "similar_status": ""}, {"company": "Power Digital", "title": "Junior Software Engineer", "location": "Remote - USA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://job-boards.greenhouse.io/powerdigitalmarketing/jobs/5219859007", "similar_status": ""}, {"company": "Power Digital", "title": "Junior Software Engineer", "location": "Remote - USA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://job-boards.greenhouse.io/powerdigitalmarketing/jobs/5219870007", "similar_status": ""}, {"company": "Power Digital", "title": "Junior Software Engineer", "location": "Remote - USA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://job-boards.greenhouse.io/powerdigitalmarketing/jobs/5219866007", "similar_status": ""}, {"company": "Tatitlek", "title": "Junior Software Developer", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "9d", "url": "https://careers-tatitlek.icims.com/jobs/2738/junior-software-developer/job", "similar_status": "opened"}, {"company": "Greptile", "title": "Frontend Engineer", "location": "San Francisco, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "11d", "url": "https://jobs.ashbyhq.com/greptile/ce412761-a605-4540-9fb5-624c67ba2b02", "similar_status": ""}, {"company": "KBR", "title": "Simulation Software Analyst / Engineer", "location": "Beavercreek, OH", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "11d", "url": "https://kbr.wd5.myworkdayjobs.com/en-US/kbr_careers/job/Beavercreek-Ohio/Simulation-Software-Analyst---Engineer_R2128730", "similar_status": ""}, {"company": "Bespoke Technologies", "title": "ServiceNow Developer", "location": "Northern VA, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "12d", "url": "http://bespoketechinc.applytojob.com/apply/P7dQwZcnVc/ServiceNow-Developer", "similar_status": ""}, {"company": "CompuGroup Medical SE & Co. KGaA", "title": "Software Support Specialist I", "location": "Austin, TX", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "12d", "url": "https://cgm.wd3.myworkdayjobs.com/en-US/cgm/job/Austin--13640-Briarwick-Dr-Suite-110/Software-Support-Specialist-I_JR108644", "similar_status": "opened"}, {"company": "General Dynamics Mission Systems", "title": "Software Engineer - Entry Level", "location": "Manassas, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$77,843.00 - $86,358.00", "age": "12d", "url": "https://careers-gdms.icims.com/jobs/74471/software-engineer-%e2%80%93-entry-level/job", "similar_status": ""}, {"company": "Morgan Stanley", "title": "Equity Research - Analyst/Associate - Software - New York", "location": "New York City, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$110,000 (Est.)", "age": "12d", "url": "https://ms.wd5.myworkdayjobs.com/en-US/external/job/New-York-New-York-United-States-of-America/Equity-Research-Analyst-Associate---Software_JR040545-1", "similar_status": ""}, {"company": "Nightwing", "title": "Dev Ops Engineer", "location": "Sterling, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$77,000 - $163,000", "age": "12d", "url": "https://nwis.wd12.myworkdayjobs.com/en-US/nw/job/Sterling-VA/Dev-Ops-Engineer_JR101999", "similar_status": ""}, {"company": "SERES", "title": "Embedded Firmware Engineer", "location": "Milpitas, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$80,000 - $120,000", "age": "12d", "url": "https://www.driveseres.com/career/?gh_jid=8146278", "similar_status": ""}, {"company": "SimVentions", "title": "Jr-to-Mid Software Developer", "location": "Dahlgren, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$79,000.00 - $109,760.00", "age": "12d", "url": "https://careers-simventions.icims.com/jobs/1618/jr-to-mid-software-developer/job", "similar_status": ""}, {"company": "SpaceX", "title": "Software Engineer - Simulation & Flight Systems", "location": "Hawthorne, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$125,000.00 - $160,000.00", "age": "12d", "url": "https://boards.greenhouse.io/spacex/jobs/8735368002?gh_jid=8735368002", "similar_status": ""}, {"company": "SpaceX", "title": "Full Stack Software Engineer - Simulation & Flight Systems", "location": "Hawthorne, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$125,000.00 - $160,000.00", "age": "12d", "url": "https://boards.greenhouse.io/spacex/jobs/8731959002?gh_jid=8731959002", "similar_status": ""}, {"company": "Guidehouse", "title": "Data Analyst - Dashboard Developer", "location": "Arlington, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "13d", "url": "https://guidehouse.wd1.myworkdayjobs.com/en-US/external/job/US---VA-Arlington/Data-Analyst--Dashboard-Developer-_42823-1", "similar_status": "opened"}, {"company": "Peraton", "title": "Cobol Software Developer", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$51,000 - $82,000", "age": "13d", "url": "https://careers-peraton.icims.com/jobs/169890/cobol-software-developer/job", "similar_status": ""}, {"company": "Peraton", "title": "Cobol Software Developer", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$51,000 - $82,000", "age": "13d", "url": "https://careers-peraton.icims.com/jobs/169891/cobol-software-developer/job", "similar_status": ""}, {"company": "Peterson Technologies", "title": "Cloud Software Engineer", "location": "Annapolis Junction, MD", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$165,000 - $200,000", "age": "13d", "url": "http://petersontechnologies.applytojob.com/apply/XJxNmWnsnO/Cloud-Software-Engineer", "similar_status": ""}, {"company": "Anduril", "title": "Software Engineer - Battlespace Awareness", "location": "Broomfield, CO +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$111,000 - $147,000   USD", "age": "14d", "url": "https://boards.greenhouse.io/andurilindustries/jobs/5215627007?gh_jid=5215627007", "similar_status": ""}, {"company": "Anduril", "title": "Software Engineer - Tracking", "location": "Broomfield, CO +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://boards.greenhouse.io/andurilindustries/jobs/5215629007?gh_jid=5215629007", "similar_status": ""}, {"company": "Blue Origin", "title": "Launch and Test Engineer III - Ground Software", "location": "Space Coast, FL", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://blueorigin.wd5.myworkdayjobs.com/en-US/blueorigin/job/Space-Coast-FL/Launch-and-Test-Engineer-III--Ground-Software-_R70730-1", "similar_status": ""}, {"company": "Health Catalyst", "title": "Jr DevOps Engineer- Interoperability", "location": "Salt Lake City, UT", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://healthcatalyst.wd5.myworkdayjobs.com/en-US/healthcatalystcareers/job/Salt-Lake-City-UT/Jr-DevOps-Engineer--Interoperability_REQ-3280", "similar_status": ""}, {"company": "Nike", "title": "Footwear Product Developer", "location": "Beaverton, OR", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://nike.wd1.myworkdayjobs.com/en-US/nke/job/Beaverton-Oregon/Footwear-Product-Developer_R-90233", "similar_status": ""}, {"company": "SUSE", "title": "Cloud Native Support Engineer", "location": "Pleasant Grove, UT +6", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "14d", "url": "https://suse.wd3.myworkdayjobs.com/en-US/jobsatsuse/job/Pleasant-Grove-UT-United-States-of-America/Cloud-Native-Support-Engineer_71007758", "similar_status": ""}, {"company": "Applied Materials", "title": "Global Software Support Engineer I", "location": "Austin, TX", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$70,000.00 - $95,500.00", "age": "15d", "url": "https://amat.wd1.myworkdayjobs.com/en-US/external/job/AustinTX/Global-Software-Support-Engineer-I_R2625245", "similar_status": ""}, {"company": "LMI Innovation", "title": "SharePoint & Power Platform Developer", "location": "Wright-Patterson AFB, OH", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$105,000.00 - $125,000", "age": "15d", "url": "https://careers-lmi.icims.com/jobs/14447/sharepoint-%26-power-platform-developer/job", "similar_status": ""}, {"company": "National Information Solutions Cooperative", "title": "Software Developer - Meter Data Management Software - Full Stack - Back End", "location": "Cedar Rapids, IA +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$25,000 (Est.)", "age": "15d", "url": "https://job-boards.greenhouse.io/testnisc/jobs/8137825", "similar_status": ""}, {"company": "National Information Solutions Cooperative", "title": "Software Developer - Meter Data Management Software - Full Stack - Back End", "location": "Cedar Rapids, IA +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$25,000 (Est.)", "age": "15d", "url": "https://job-boards.greenhouse.io/testnisc/jobs/8137804", "similar_status": ""}, {"company": "National Information Solutions Cooperative", "title": "Software Developer - Meter Data Management Software - Full Stack - Back End", "location": "Cedar Rapids, IA +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "15d", "url": "https://job-boards.greenhouse.io/testnisc/jobs/8137829", "similar_status": ""}, {"company": "National Information Solutions Cooperative", "title": "Software Developer - Meter Data Management Software - Full Stack - Back End", "location": "Cedar Rapids, IA +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$25,000 (Est.)", "age": "15d", "url": "https://job-boards.greenhouse.io/nisc/jobs/8137777", "similar_status": ""}, {"company": "Assyst", "title": ".NET Developer - Entry Level", "location": "Sterling, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "16d", "url": "https://job-boards.greenhouse.io/assystinc/jobs/4371586009", "similar_status": ""}, {"company": "LMI Innovation", "title": "Jr. Android Engineer - RFID", "location": "Remote - USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$57,000 - $97,000", "age": "16d", "url": "https://careers-lmi.icims.com/jobs/14418/jr.-android-engineer-%28rfid%29/job", "similar_status": ""}, {"company": "Teledyne", "title": "Jr. Adobe Captivate Developer", "location": "Texas, USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "16d", "url": "https://flir.wd1.myworkdayjobs.com/en-US/flircareers/job/US---Field---Texas/Jr-Adobe-Captivate-Developer_REQ36326", "similar_status": ""}, {"company": "Teledyne", "title": "Jr. Adobe Captivate Developer", "location": "Texas, USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "16d", "url": "https://flir.wd1.myworkdayjobs.com/en-US/flircareers/job/US---Field---Texas/Jr-Adobe-Captivate-Developer_REQ36327", "similar_status": ""}, {"company": "Careerswift", "title": "JUNIOR SOFTWARE DEVELOPER", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$65,000 - $85,000", "age": "19d", "url": "https://jobs.ashbyhq.com/careerswift.ai/90833e01-246c-4e30-97a6-4dd3ac317876", "similar_status": ""}, {"company": "CVS Health", "title": "Front End Pharmacy Tech", "location": "Pittsburgh, PA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$17.00 - $28.46", "age": "19d", "url": "https://cvshealth.wd1.myworkdayjobs.com/en-US/cvs_health_careers/job/PA---Pittsburgh/Front-End-Pharmacy-Tech_R1006948", "similar_status": ""}, {"company": "Fidelity Investments", "title": "January 2027 - Leap Software Engineer", "location": "Westlake, TX +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "19d", "url": "https://fmr.wd1.myworkdayjobs.com/en-US/targeted/job/Westlake-TX/January-2027---Leap-Software-Engineer_2133859", "similar_status": ""}, {"company": "Fidelity Investments", "title": "April 2027 - Leap Software Engineer", "location": "Westlake, TX +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "19d", "url": "https://fmr.wd1.myworkdayjobs.com/en-US/targeted/job/Westlake-TX/April-2027---Leap-Software-Engineer_2133870", "similar_status": ""}, {"company": "Fidelity Investments", "title": "July 2027 - Leap Software Engineer", "location": "Westlake, TX +2", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "19d", "url": "https://fmr.wd1.myworkdayjobs.com/en-US/targeted/job/Westlake-TX/July-2027---Leap-Software-Engineer_2133877", "similar_status": ""}, {"company": "Book of the Month", "title": "Associate Software Engineer - Frontend", "location": "New York City, NY", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$80,000 - $100,000", "age": "20d", "url": "http://bookofthemonth.applytojob.com/apply/ByZkWONsJH/Associate-Software-Engineer-Frontend", "similar_status": ""}, {"company": "Bristol Myers Squibb", "title": "Veeva CRM Admin/Developer - Field Enablement", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$65,790 - $79,722", "age": "20d", "url": "https://bristolmyerssquibb.wd5.myworkdayjobs.com/en-US/bms/job/Princeton---NJ---US/Veeva-CRM-Admin-Developer---Field-Enablement_R1605331", "similar_status": ""}, {"company": "ICF", "title": "Computer Scientist / Software Developer - Junior - Security Clearance Required", "location": "Adelphi, MD", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$81,499.00 - $138,549.00", "age": "20d", "url": "https://icf.wd5.myworkdayjobs.com/en-US/icfexternal_career_site/job/Adelphi-MD/Computer-Scientist---Software-Developer--Junior---Security-Clearance-Required_R2600165", "similar_status": ""}, {"company": "ICF", "title": "Appian Developer- Remote", "location": "Reston, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$81,499.00 - $138,549.00", "age": "20d", "url": "https://icf.wd5.myworkdayjobs.com/en-US/icfexternal_career_site/job/Reston-VA/Appian-Developer--Remote_R2501916-1", "similar_status": ""}, {"company": "MRI Software", "title": "Account Manager - Occupier Software Solutions", "location": "Cleveland, OH", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "20d", "url": "https://mrisoftware.wd501.myworkdayjobs.com/en-US/external_careersite/job/Cleveland-Ohio-Office/Account-Manager---Occupier-Software-Solutions_R-109192", "similar_status": ""}, {"company": "Amentum", "title": "Software Developer", "location": "Dahlgren, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$80,000 - $110,000", "age": "21d", "url": "https://pae.wd1.myworkdayjobs.com/en-US/amentum_careers/job/US-VA-Dahlgren/Software-Developer_R0168140", "similar_status": ""}, {"company": "Axos Bank", "title": "JBATA- Application Developer", "location": "San Diego, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$30.00 - $30.00", "age": "21d", "url": "https://axos.wd5.myworkdayjobs.com/en-US/axos/job/HQ---San-Diego-CA/JBATA--Application-Developer_JR4464", "similar_status": ""}, {"company": "Blend", "title": "Software Engineer - AI Native - Full Stack", "location": "Raleigh, NC", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$92,000 - $109,000", "age": "21d", "url": "https://job-boards.greenhouse.io/blend/jobs/6141420004", "similar_status": ""}, {"company": "Guidehouse", "title": "DevSecOps Cloud Engineer", "location": "Remote - San Antonio, TX", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$46,000.00 - $76,000.00", "age": "21d", "url": "https://guidehouse.wd1.myworkdayjobs.com/en-US/external/job/US---TX-San-Antonio/DevSecOps-Cloud-Engineer_42321", "similar_status": ""}, {"company": "Northrop Grumman", "title": "Associate Software Engineer", "location": "Rolling Meadows, IL", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$72,700.00 - $109,100.00", "age": "21d", "url": "https://ngc.wd1.myworkdayjobs.com/en-US/northrop_grumman_external_site/job/United-States-Illinois-Rolling-Meadows/Associate-Software-Engineer_R10245470", "similar_status": "skipped"}, {"company": "American Association for Cancer Research", "title": "Junior Salesforce Developer", "location": "Philadelphia, PA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "22d", "url": "https://careers-aacr.icims.com/jobs/1787/junior-salesforce-developer/job", "similar_status": ""}, {"company": "SharkNinja", "title": "Associate Product Developer - Ninja APAC", "location": "Needham, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$56,300 - $80,000   USD", "age": "22d", "url": "https://job-boards.greenhouse.io/sharkninjaoperatingllc/jobs/4703760006", "similar_status": ""}, {"company": "SharkNinja", "title": "Associate Product Developer - Indoor Heated", "location": "Needham, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$56,300 - $75,000   USD", "age": "22d", "url": "https://job-boards.greenhouse.io/sharkninjaoperatingllc/jobs/4702969006", "similar_status": ""}, {"company": "Valsoft Corporation", "title": "Software Support Specialist", "location": "USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$65,000 - $75,000 USD", "age": "22d", "url": "https://apply.workable.com/valsoft-corp/j/26C53130AE/", "similar_status": ""}, {"company": "Avanade", "title": "Junior DevOps Engineer", "location": "Cincinnati, OH", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$76,000 - $110,200", "age": "23d", "url": "https://accenture.wd103.myworkdayjobs.com/en-US/avanadecareers/job/Cincinnati-4th-Street-Corp/Junior-DevOps-Engineer_R00332498", "similar_status": ""}, {"company": "Swift", "title": "Software Engineer - Hybrid", "location": "Manassas, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$82,361.00 (Est.)", "age": "23d", "url": "https://swift.wd3.myworkdayjobs.com/en-US/join-swift/job/Manassas-United-States/Software-Engineer_2026-15645-1", "similar_status": ""}, {"company": "Ace IT Careers", "title": "QA Software Tester - Entry Level", "location": "Atlanta, GA +5", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "26d", "url": "https://apply.workable.com/ace-it-careers-1/j/123BC500CB/", "similar_status": ""}, {"company": "LMI Innovation", "title": "Integrating Firmware Engineer-Mesh", "location": "Remote - USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$60,000 - $95,000", "age": "26d", "url": "https://careers-lmi.icims.com/jobs/14396/integrating-firmware-engineer-mesh/job", "similar_status": ""}, {"company": "Penn State", "title": "Systems Administrator - Linux/Cloud", "location": "Reston, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$74,760.00 - $123,480.00", "age": "26d", "url": "https://psu.wd1.myworkdayjobs.com/en-US/psu_staff/job/Reston-VA/Systems-Administrator--Linux-Cloud-_REQ_0000079324-2", "similar_status": ""}, {"company": "Swift", "title": "Jr. Software Development Engineer in Test - SDET", "location": "Manassas, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$82,361 (Est.)", "age": "26d", "url": "https://swift.wd3.myworkdayjobs.com/en-US/join-swift/job/Manassas-United-States/Jr-Software-Development-Engineer-in-Test--SDET-_2026-16183-1", "similar_status": "opened"}, {"company": "Impact", "title": "Associate Software Engineer", "location": "Santa Barbara, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$80,000.00 - $90,000.00", "age": "27d", "url": "https://job-boards.greenhouse.io/impact/jobs/8645964002", "similar_status": ""}, {"company": "Curtiss-Wright", "title": "Associate Software Development Engineer", "location": "Tewksbury, MA +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$  74,100 - $95,000", "age": "28d", "url": "https://curtisswright.wd1.myworkdayjobs.com/en-US/cw_external_career_site/job/US-MA-Tewksbury-TCG/Associate-Software-Development-Engineer_JR12926-1", "similar_status": "skipped"}, {"company": "Re:Build Manufacturing", "title": "Software Engineer", "location": "Framingham, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "35d", "url": "https://job-boards.greenhouse.io/rebuildmanufacturing/jobs/4719210005", "similar_status": ""}, {"company": "Motorola Solutions", "title": "Software Engineer II", "location": "Schaumburg, IL", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$73,800 - $107,600 USD", "age": "43d", "url": "https://motorolasolutions.wd5.myworkdayjobs.com/en-US/careers/job/Schaumburg-IL/Software-Engineer-II_R66729", "similar_status": ""}, {"company": "WHOOP", "title": "Android Engineer I", "location": "Boston, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$105,000 - $145,000", "age": "44d", "url": "https://jobs.ashbyhq.com/whoop/2910a5f6-fb5e-4fe6-bb9a-24d6995d8173", "similar_status": ""}, {"company": "Samsara", "title": "Software Engineer II", "location": "Remote - USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "48d", "url": "https://www.samsara.com/company/careers/roles/8036387?gh_jid=8036387", "similar_status": ""}, {"company": "CarGurus", "title": "Software Development Engineer II - Developer Experience Architecture", "location": "Boston, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "50d", "url": "https://careers.cargurus.com/us/en/job/8050961?gh_jid=8050961", "similar_status": ""}, {"company": "Motorola Solutions", "title": "Web Interface Software Engineer", "location": "Los Angeles, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$43.27 - $57.00 / hour", "age": "50d", "url": "https://motorolasolutions.wd5.myworkdayjobs.com/en-US/careers/job/Los-Angeles-CA/Web-Interface-Software-Engineer_R66626", "similar_status": ""}, {"company": "Northrop Grumman", "title": "SDS Associate / Embedded Software Engineer - 19013", "location": "Roy, UT", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$65,800.00 - $98,800.00", "age": "50d", "url": "https://ngc.wd1.myworkdayjobs.com/en-US/northrop_grumman_external_site/job/United-States-Utah-Roy/SDS-Associate---Embedded-Software-Engineer---19013-_R10239748", "similar_status": ""}, {"company": "Relativity", "title": "Software Engineer", "location": "Illinois, USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$79,000 (Est.)", "age": "55d", "url": "https://kcura.wd1.myworkdayjobs.com/en-US/external_career_site/job/Illinois/Software-Engineer_26-0317", "similar_status": ""}, {"company": "Klaviyo", "title": "Software Engineer II - Mobile Developer - Android/Kotlin - Mobile App Growth", "location": "Boston, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "56d", "url": "https://www.klaviyo.com/careers/jobs/7792539003?gh_jid=7792539003", "similar_status": ""}, {"company": "Analog Devices", "title": "Associate Engineer: Embedded Audio Software", "location": "San Jose, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$82,787 - $113,857", "age": "57d", "url": "https://analogdevices.wd1.myworkdayjobs.com/en-US/external/job/US-CA-San-Jose-Rio-Robles/Associate-Engineer--Embedded-Audio-Software_R263781", "similar_status": ""}, {"company": "TJX", "title": "front end", "location": "West Valley City, UT", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$14.50 to $15.00 per hour", "age": "60d", "url": "https://tjx.wd1.myworkdayjobs.com/en-US/tjx_external/job/West-Valley-City-UT-84120/front-end_REQ130082-1", "similar_status": "skipped"}, {"company": "Carnegie Mellon University", "title": "Systems Software Engineer - Computing Services", "location": "Pittsburgh, PA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "", "age": "65d", "url": "https://cmu.wd115.myworkdayjobs.com/en-US/cmu/job/Pittsburgh-PA/Systems-Software-Engineer---Computing-Services_2024765", "similar_status": "opened"}, {"company": "Ridgeline", "title": "Content Developer", "location": "San Ramon, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$76,000 - $97,000", "age": "69d", "url": "https://boards.greenhouse.io/ridgeline/jobs/7784169003?gh_jid=7784169003", "similar_status": ""}, {"company": "Civis Analytics", "title": "Software Engineer - Contract", "location": "Remote - Chicago, IL +1", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$90,000 (Est.)", "age": "71d", "url": "https://job-boards.greenhouse.io/civisanalytics/jobs/8021887", "similar_status": ""}, {"company": "Murray Company Mechanical Contractors", "title": "Associate Programmer - Full Stack", "location": "Cypress, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$75,000.00 - $95,000.00", "age": "72d", "url": "https://apply.workable.com/murray-company/j/C050614DCC/", "similar_status": ""}, {"company": "ARSIEM", "title": "390 - Jr. Software Engineer", "location": "Ft. Meade, MD", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$103,000 - $115,000", "age": "78d", "url": "https://jobs.lever.co/arsiem/55fc1d5c-1a48-4386-a1e5-3ac54ca2dee7", "similar_status": ""}, {"company": "Parsons", "title": "Software Engineer TS", "location": "Centreville, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$63,600.00 - $111,300.00", "age": "79d", "url": "https://parsons.wd5.myworkdayjobs.com/en-US/search/job/US---VA-Centreville/Software-Engineer_R175644-1", "similar_status": ""}, {"company": "Pariveda", "title": "Technical Software Consultant", "location": "El Segundo, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$85,400 - $94,000", "age": "84d", "url": "https://jobs.ashbyhq.com/pariveda/dc6d0202-395c-42b0-b55e-0f95e3f49c40", "similar_status": ""}, {"company": "Pariveda", "title": "Technical Software Consultant", "location": "San Francisco, CA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$91,800 - $101,000", "age": "84d", "url": "https://jobs.ashbyhq.com/pariveda/d825ed65-edd8-4540-92c9-4c01f2b6a982", "similar_status": ""}, {"company": "VivSoft Technologies", "title": "Software Engineer - Entry Level", "location": "Herndon, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$70,000 - $85,000", "age": "92d", "url": "http://vivsofttechnologiesfa.applytojob.com/apply/QLa8RzmXAc/Software-Engineer-Entry-Level", "similar_status": ""}, {"company": "Axos Bank", "title": "AVP - Frontend Outsystems Manager", "location": "San Diego, CA +3", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$110,000.00 - $140,000.00", "age": "96d", "url": "https://axos.wd5.myworkdayjobs.com/en-US/axos/job/San-Diego-CA/AVP--Frontend-Engineer_JR1041", "similar_status": ""}, {"company": "IsI Enterprises", "title": "Junior Cloud Engineer - Hybrid", "location": "Herndon, VA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$80,000 - $95,000", "age": "103d", "url": "http://isienterprises.applytojob.com/apply/MFGArI1zqR/Junior-Cloud-Engineer-Hybrid", "similar_status": ""}, {"company": "Sonos", "title": "Junior Embedded Software Development Engineer", "location": "Boston, MA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$93,000 (Est.)", "age": "105d", "url": "https://sonos.wd1.myworkdayjobs.com/en-US/sonos/job/Boston-MA/Junior-Embedded-Software-Development-Engineer_R2666", "similar_status": "opened"}, {"company": "Relativity", "title": "Software Engineer", "location": "Illinois, USA", "repository": "2027-SWE-College-Jobs", "category": "Other", "salary": "$79,000 (Est.)", "age": "107d", "url": "https://kcura.wd1.myworkdayjobs.com/en-US/external_career_site/job/Illinois/Software-Engineer_26-0232", "similar_status": ""}];
+        let activeTab = 'all';
+        const undoStack = [];
+        const disabledSections = new Set();
+
+        const searchInput = document.getElementById('search-input');
+        const sortSelect = document.getElementById('sort-select');
+        const statsBadge = document.getElementById('stats-badge');
+        const dashboardContent = document.getElementById('dashboard-content');
+        const navBar = document.getElementById('section-nav-bar');
+        const navLinks = document.getElementById('section-nav-links');
+        const undoBtn = document.getElementById('undo-btn');
+
+        // Retrieve local storage rules
+        function getLocalStorageSet(key) {
+            return new Set(JSON.parse(localStorage.getItem(key) || '[]'));
+        }
+
+        function saveLocalStorageSet(key, set) {
+            localStorage.setItem(key, JSON.stringify(Array.from(set)));
+        }
+
+        function setTab(tabName) {
+            activeTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.getAttribute('data-repo') === tabName) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            filterAndSortJobs();
+        }
+
+        function hideJob(url, actionType = 'hide') {
+            const key = actionType === 'apply' ? 'applied_locally' : 'hidden_urls';
+            const s = getLocalStorageSet(key);
+            s.add(url);
+            saveLocalStorageSet(key, s);
+            
+            undoStack.push({ action: actionType, url: url });
+            updateUndoState();
+            filterAndSortJobs();
+        }
+
+        function undoLastAction() {
+            if (undoStack.length === 0) return;
+            const last = undoStack.pop();
+            const key = last.action === 'apply' ? 'applied_locally' : 'hidden_urls';
+            
+            const s = getLocalStorageSet(key);
+            s.delete(last.url);
+            saveLocalStorageSet(key, s);
+            
+            updateUndoState();
+            filterAndSortJobs();
+        }
+
+        function updateUndoState() {
+            undoBtn.disabled = (undoStack.length === 0);
+        }
+
+        function renderDashboard(filteredJobs) {
+            dashboardContent.innerHTML = '';
+            navLinks.innerHTML = '';
+            const navButtons = [];
+            
+            // Get hidden collections
+            const hiddenSet = getLocalStorageSet('hidden_urls');
+            const appliedSet = getLocalStorageSet('applied_locally');
+
+            // Filter out hidden/locally applied cards
+            const visibleJobs = filteredJobs.filter(job => !hiddenSet.has(job.url) && !appliedSet.has(job.url));
+
+            // Filter by active tab
+            let tabFiltered = visibleJobs;
+            if (activeTab !== 'all') {
+                tabFiltered = visibleJobs.filter(job => {
+                    if (activeTab === 'SimplifyJobs') {
+                        return job.repository.startsWith('SimplifyJobs');
+                    }
+                    return job.repository === activeTab;
+                });
+            }
+
+            if (tabFiltered.length === 0) {
+                dashboardContent.innerHTML = '<div class="no-results">No new jobs found matching your filters.</div>';
+                statsBadge.textContent = '0 New Jobs';
+                navBar.style.display = 'none';
+                return;
+            }
+
+            statsBadge.textContent = `${tabFiltered.length} New Jobs Available`;
+
+            // Structured groupings mimicking target repositories
+            const groups = {
+                "2027-AI-College-Jobs": {
+                    title: "2027 AI College Jobs",
+                    categories: { "FAANG": [], "Finance": [], "Other": [] }
+                },
+                "SimplifyJobs": {
+                    title: "SimplifyJobs",
+                    categories: { 
+                        "Software Engineering": [], 
+                        "Data Science, AI & Machine Learning": [] 
+                    }
+                },
+                "2027-SWE-College-Jobs": {
+                    title: "2027 SWE College Jobs",
+                    categories: { "FAANG": [], "Finance": [], "Other": [] }
+                }
+            };
+
+            // Distribute jobs into groups
+            tabFiltered.forEach(job => {
+                if (job.repository === "2027-AI-College-Jobs") {
+                    const cat = job.category || "Other";
+                    if (groups["2027-AI-College-Jobs"].categories[cat]) {
+                        groups["2027-AI-College-Jobs"].categories[cat].push(job);
+                    } else {
+                        groups["2027-AI-College-Jobs"].categories["Other"].push(job);
+                    }
+                } else if (job.repository.startsWith("SimplifyJobs")) {
+                    const cat = (job.category === "Data Science, AI & Machine Learning" || job.category === "Data Science/AI/ML") 
+                        ? "Data Science, AI & Machine Learning" 
+                        : "Software Engineering";
+                    groups["SimplifyJobs"].categories[cat].push(job);
+                } else if (job.repository === "2027-SWE-College-Jobs") {
+                    const cat = job.category || "Other";
+                    if (groups["2027-SWE-College-Jobs"].categories[cat]) {
+                        groups["2027-SWE-College-Jobs"].categories[cat].push(job);
+                    } else {
+                        groups["2027-SWE-College-Jobs"].categories["Other"].push(job);
+                    }
+                }
+            });
+
+            // Render groups
+            Object.keys(groups).forEach(groupKey => {
+                const group = groups[groupKey];
+                
+                // Count how many jobs in this group
+                let groupJobCount = 0;
+                Object.keys(group.categories).forEach(catKey => {
+                    groupJobCount += group.categories[catKey].length;
+                });
+
+                if (groupJobCount === 0) return;
+
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'repo-group';
+                
+                const groupTitle = document.createElement('h2');
+                groupTitle.className = 'repo-title';
+                groupTitle.textContent = group.title;
+                groupDiv.appendChild(groupTitle);
+
+                // Render categories inside group
+                Object.keys(group.categories).forEach(catKey => {
+                    const catJobs = group.categories[catKey];
+                    if (catJobs.length === 0) return;
+
+                    const sectionId = 'sec-' + groupKey + '-' + catKey.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '').toLowerCase();
+
+                    const catDiv = document.createElement('div');
+                    catDiv.className = 'category-group';
+                    catDiv.id = sectionId;
+                    if (disabledSections.has(sectionId)) {
+                        catDiv.style.display = 'none';
+                    }
+                    
+                    const catTitle = document.createElement('h3');
+                    catTitle.className = 'category-title';
+                    
+                    // Add emojis or clean display names
+                    let dispName = catKey;
+                    let dispNameShort = catKey;
+                    if (catKey === "FAANG") {
+                        dispName = "🔥 FAANG+ Roles";
+                        dispNameShort = "FAANG+";
+                    } else if (catKey === "Finance") {
+                        dispName = "📈 Finance & Quant Roles";
+                        dispNameShort = "Finance/Quant";
+                    } else if (catKey === "Other") {
+                        dispName = "💼 Other Roles";
+                        dispNameShort = "Other";
+                    } else if (catKey === "Software Engineering") {
+                        dispName = "💻 Software Engineering Roles";
+                        dispNameShort = "SWE";
+                    } else if (catKey === "Data Science, AI & Machine Learning") {
+                        dispName = "🤖 Data Science, AI & Machine Learning Roles";
+                        dispNameShort = "DS/AI/ML";
+                    }
+                    
+                    catTitle.textContent = dispName;
+                    catDiv.appendChild(catTitle);
+
+                    // Add to nav buttons list
+                    let buttonLabel = dispNameShort;
+                    if (activeTab === 'all') {
+                        const prefix = groupKey === "2027-AI-College-Jobs" ? "AI" : (groupKey === "2027-SWE-College-Jobs" ? "SWE" : "Simplify");
+                        buttonLabel = prefix + " - " + dispNameShort;
+                    }
+                    navButtons.push({
+                        label: buttonLabel,
+                        id: sectionId
+                    });
+
+                    const grid = document.createElement('div');
+                    grid.className = 'jobs-grid';
+
+                    catJobs.forEach(job => {
+                        const card = document.createElement('div');
+                        card.className = 'job-card';
+                        
+                        const salaryBadge = job.salary ? `<span class="salary-badge">💵 ${escapeHtml(job.salary)}</span>` : '';
+                        const ageBadge = job.age ? `<span class="age-badge">📅 ${escapeHtml(job.age)}</span>` : '';
+                        
+                        let warningBadge = '';
+                        if (job.similar_status) {
+                            const label = job.similar_status === 'applied' ? 'Applied' : (job.similar_status === 'skipped' ? 'Skipped' : 'Opened');
+                            warningBadge = `<span class="warning-badge" title="You previously marked a similar role at this company as ${label}">⚠️ Similar ${label}</span>`;
+                        }
+                        
+                        card.innerHTML = `
+                            <div>
+                                <div class="card-header">
+                                    <div class="company-name">${escapeHtml(job.company)}</div>
+                                    <button class="close-btn" title="Dismiss Job Listing" onclick="hideJob('${job.url}', 'hide')">×</button>
+                                </div>
+                                <div class="job-title" title="${escapeHtml(job.title)}">${escapeHtml(job.title)}</div>
+                                <div class="job-meta">
+                                    <div class="meta-item">
+                                        <svg class="meta-icon" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                                        <span>${escapeHtml(job.location)}</span>
+                                    </div>
+                                    <div class="badge-group">
+                                        ${salaryBadge}
+                                        ${ageBadge}
+                                        ${warningBadge}
+                                    </div>
+                                </div>
+                            </div>
+                            <a href="${job.url}" target="_blank" rel="noopener noreferrer" class="apply-btn" onclick="hideJob('${job.url}', 'apply')" onauxclick="if(event.button === 1) hideJob('${job.url}', 'apply')">Apply Now</a>
+                        `;
+                        grid.appendChild(card);
+                    });
+
+                    catDiv.appendChild(grid);
+                    groupDiv.appendChild(catDiv);
+                });
+
+                dashboardContent.appendChild(groupDiv);
+            });
+
+            // Build Section Jump Navigation Buttons
+            if (navButtons.length > 1) {
+                navBar.style.display = 'flex';
+                navButtons.forEach(btn => {
+                    const button = document.createElement('button');
+                    button.className = 'section-nav-btn';
+                    button.textContent = btn.label;
+                    
+                    if (disabledSections.has(btn.id)) {
+                        button.style.background = 'rgba(239, 68, 68, 0.15)';
+                        button.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                        button.style.color = '#f87171';
+                        button.style.textDecoration = 'line-through';
+                    }
+                    
+                    button.onclick = () => {
+                        toggleSection(btn.id);
+                    };
+                    navLinks.appendChild(button);
+                });
+            } else {
+                navBar.style.display = 'none';
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+
+        function parseSalaryValue(salaryStr) {
+            if (!salaryStr) return 0;
+            let cleaned = salaryStr.toLowerCase().replace(/,/g, '');
+            // Normalize periods used as thousand separators (e.g. 81.000 -> 81000)
+            cleaned = cleaned.replace(/\.([0-9]3)/g, '$1');
+            // Convert abbreviations (e.g. 100k -> 100000)
+            cleaned = cleaned.replace(/([0-9.]+)\s*k/g, (match, num) => parseFloat(num) * 1000);
+            
+            let numbers = cleaned.match(/[0-9]+(?:\.[0-9]+)?/g);
+            if (!numbers || numbers.length === 0) return 0;
+            
+            let values = numbers.map(n => parseFloat(n));
+            
+            // Check if hourly and estimate yearly. Ignore 0.
+            let isHourly = cleaned.includes('hr') || cleaned.includes('hour') || values.some(v => v > 0 && v < 200);
+            if (isHourly) {
+                values = values.map(v => v * 2000); // 2000 hours/yr
+            }
+            
+            return Math.max(...values);
+        }
+
+
+        function filterAndSortJobs() {
+            const query = searchInput.value.toLowerCase().trim ? searchInput.value.toLowerCase().trim() : searchInput.value.toLowerCase();
+            const sortBy = sortSelect.value;
+
+            // 1. Filter by search query
+            let filtered = jobs.filter(job => {
+                return (
+                    job.company.toLowerCase().includes(query) ||
+                    job.title.toLowerCase().includes(query) ||
+                    job.location.toLowerCase().includes(query)
+                );
+            });
+
+            // 2. Separate/filter undefined salaries from sorted lists
+            if (sortBy === 'salary-desc' || sortBy === 'salary-asc') {
+                filtered = filtered.filter(job => job.salary && job.salary.trim() !== "");
+            } else if (sortBy === 'salary-undefined') {
+                filtered = filtered.filter(job => !job.salary || job.salary.trim() === "");
+            }
+
+            // 3. Sort
+            if (sortBy === 'company') {
+                filtered.sort((a, b) => a.company.localeCompare(b.company));
+            } else if (sortBy === 'location') {
+                filtered.sort((a, b) => a.location.localeCompare(b.location));
+            } else if (sortBy === 'salary-desc') {
+                filtered.sort((a, b) => parseSalaryValue(b.salary) - parseSalaryValue(a.salary));
+            } else if (sortBy === 'salary-asc') {
+                filtered.sort((a, b) => parseSalaryValue(a.salary) - parseSalaryValue(b.salary));
+            }
+
+            renderDashboard(filtered);
+        }
+
+        function toggleSection(sectionId) {
+            if (disabledSections.has(sectionId)) {
+                disabledSections.delete(sectionId);
+            } else {
+                disabledSections.add(sectionId);
+            }
+            filterAndSortJobs();
+        }
+
+        searchInput.addEventListener('input', filterAndSortJobs);
+        sortSelect.addEventListener('change', filterAndSortJobs);
+
+        // Initial render
+        renderDashboard(jobs);
+    </script>
+</body>
+</html>
