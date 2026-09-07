@@ -249,10 +249,12 @@ def main() -> None:
             new_jobs_list = [j for j in new_jobs_list if j["normalized_url"] not in dead_urls]
                      
     # Perform database write operations
+    newly_added_count = len(jobs_to_insert)
     if jobs_to_insert:
         # Filter out dead jobs from initial insert if they were found to be dead during this run
         jobs_to_insert = [j for j in jobs_to_insert if j["normalized_url"] not in dead_urls]
         insert_jobs(jobs_to_insert)
+        newly_added_count = len(jobs_to_insert)
     if jobs_to_update_status_opened:
         jobs_to_update_status_opened = [u for u in jobs_to_update_status_opened if u not in dead_urls]
         update_jobs_status_bulk(jobs_to_update_status_opened, "opened", mark_opened=True)
@@ -289,11 +291,12 @@ def main() -> None:
     print("==============================")
     print(f"Total jobs scraped:       {total_scraped}")
     print(f"Duplicate jobs removed:   {total_removed}")
+    print(f"Brand new jobs added:     {newly_added_count}")
     print(f"Already visited:          {len(already_visited_list)}")
     print(f"Opened (in DB):           {opened_count}")
     print(f"Applied (in DB):          {applied_count}")
     print(f"Skipped (in DB):          {skipped_count}")
-    print(f"New jobs:                 {len(new_jobs_list)}")
+    print(f"Total unvisited jobs:     {len(new_jobs_list)}")
     print("==============================")
     
     # Generate/regenerate reports
