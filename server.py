@@ -13,6 +13,8 @@ BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
 from jobs import run_fetch_pipeline
+from tracker.database import get_tracked_jobs, update_jobs_status_bulk, update_job_status
+from tracker.normalizer import normalize_url
 
 PORT = 5050
 HOST = "127.0.0.1"
@@ -62,8 +64,22 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             self.wfile.write(json.dumps(response_data).encode("utf-8"))
             return
 
+        if path == "/api/interactions":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            tracked = get_tracked_jobs()
+            hidden = [j["original_url"] for j in tracked.values() if j.get("status") == "skipped"]
+            applied = [j["original_url"] for j in tracked.values() if j.get("status") == "applied"]
+            self.wfile.write(json.dumps({
+                "status": "ok",
+                "hidden_urls": hidden,
+                "applied_locally": applied
+            }).encode("utf-8"))
+            return
+
         if path == "/api/fetch":
-            # Allow triggering via GET as well for simple browser testing
             self.handle_fetch_request(parsed)
             return
 
@@ -73,6 +89,63 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/fetch":
             self.handle_fetch_request(parsed)
+            return
+
+        if parsed.path == "/api/sync_interactions":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            try:
+                data = json.loads(body)
+                hidden_urls = data.get("hidden_urls", [])
+                applied_locally = data.get("applied_locally", [])
+                
+                if hidden_urls:
+                    norm_hidden = [normalize_url(u) for u in hidden_urls]
+                    update_jobs_status_bulk(norm_hidden, "skipped")
+                if applied_locally:
+                    norm_applied = [normalize_url(u) for u in applied_locally]
+                    update_jobs_status_bulk(norm_applied, "applied")
+                    
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success", "synced": len(hidden_urls) + len(applied_locally)}).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
+            return
+
+        if parsed.path == "/api/interact":
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            try:
+                data = json.loads(body)
+                url = data.get("url")
+                action = data.get("action")
+                if url and action:
+                    norm_url = normalize_url(url)
+                    if action == "apply":
+                        update_job_status(norm_url, "applied")
+                    elif action == "hide":
+                        update_job_status(norm_url, "skipped")
+                    elif action == "undo":
+                        update_job_status(norm_url, "new")
+                        
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode("utf-8"))
+            except Exception as e:
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json")
+                self._send_cors_headers()
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
             return
 
         self.send_response(404)

@@ -689,6 +689,15 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             undoStack.push({{ action: actionType, url: url }});
             updateUndoState();
             filterAndSortJobs();
+
+            const apiUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+                ? '/api/interact'
+                : 'http://127.0.0.1:5050/api/interact';
+            fetch(apiUrl, {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ url: url, action: actionType }})
+            }}).catch(() => {{}});
         }}
 
         function undoLastAction() {{
@@ -702,6 +711,15 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             
             updateUndoState();
             filterAndSortJobs();
+
+            const apiUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+                ? '/api/interact'
+                : 'http://127.0.0.1:5050/api/interact';
+            fetch(apiUrl, {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ url: last.url, action: 'undo' }})
+            }}).catch(() => {{}});
         }}
 
         function updateUndoState() {{
@@ -1066,8 +1084,53 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             }}, duration);
         }}
 
+        async function syncInteractionsWithServer() {{
+            const apiBase = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+                ? ''
+                : 'http://127.0.0.1:5050';
+
+            try {{
+                // 1. Sync whatever we have in local storage to the database
+                const localHidden = Array.from(getLocalStorageSet('hidden_urls'));
+                const localApplied = Array.from(getLocalStorageSet('applied_locally'));
+
+                if (localHidden.length > 0 || localApplied.length > 0) {{
+                    await fetch(apiBase + '/api/sync_interactions', {{
+                        method: 'POST',
+                        headers: {{ 'Content-Type': 'application/json' }},
+                        body: JSON.stringify({{ hidden_urls: localHidden, applied_locally: localApplied }})
+                    }});
+                }}
+
+                // 2. Fetch all known interactions from the database to sync cross-origin
+                const res = await fetch(apiBase + '/api/interactions');
+                if (res.ok) {{
+                    const data = await res.json();
+                    if (data.status === 'ok') {{
+                        const hSet = getLocalStorageSet('hidden_urls');
+                        const aSet = getLocalStorageSet('applied_locally');
+                        let changed = false;
+                        (data.hidden_urls || []).forEach(u => {{
+                            if (!hSet.has(u)) {{ hSet.add(u); changed = true; }}
+                        }});
+                        (data.applied_locally || []).forEach(u => {{
+                            if (!aSet.has(u)) {{ aSet.add(u); changed = true; }}
+                        }});
+                        if (changed) {{
+                            saveLocalStorageSet('hidden_urls', hSet);
+                            saveLocalStorageSet('applied_locally', aSet);
+                            filterAndSortJobs();
+                        }}
+                    }}
+                }}
+            }} catch (err) {{
+                console.debug('Interactions sync not available:', err);
+            }}
+        }}
+
         // Initial render
         renderDashboard(jobs);
+        syncInteractionsWithServer();
     </script>
 </body>
 </html>
