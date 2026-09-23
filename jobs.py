@@ -149,12 +149,22 @@ def main() -> None:
         run_export()
         return
 
-    # For normal run and --daily run:
+def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -> Dict[str, Any]:
+    """
+    Executes the full job fetch pipeline:
+    1. Ingests from all configured repositories
+    2. Deduplicates & normalizes URLs
+    3. Cross-references Chrome history & applied.db
+    4. Extracts missing salary telemetry
+    5. Updates SQLite database & regenerates CSV/HTML exports
+    Returns a dictionary summarizing the run.
+    """
     init_db()
     
     # 1. Scrape jobs from all repositories
-    print("Scraping job repositories...")
-    scraped_jobs = scrape_all_jobs(force_refresh=args.refresh)
+    if print_output:
+        print("Scraping job repositories...")
+    scraped_jobs = scrape_all_jobs(force_refresh=force_refresh)
     total_scraped = len(scraped_jobs)
     
     # 2. Deduplicate based on normalized URLs
@@ -183,42 +193,32 @@ def main() -> None:
         in_chrome = norm_url in normalized_chrome_urls
         
         if is_first_run:
-            # First run behavior:
-            # Initialize applied.db ONLY with jobs confirmed to exist in Chrome History.
             if in_chrome:
                 job["status"] = "opened"
                 job["date_opened"] = datetime.now().isoformat()
                 jobs_to_insert.append(job)
                 already_visited_list.append(job)
             else:
-                # Do NOT insert to DB on first run if not in Chrome (or we can defer inserting new jobs).
-                # But we should still display them as NEW to the user!
                 new_jobs_list.append(job)
         else:
-            # Subsequent runs:
-            # Compare against BOTH Chrome History and applied.db
             if norm_url in tracked_jobs:
                 db_job = tracked_jobs[norm_url]
-                # If it's in Chrome history but database says 'new', update it to 'opened'
                 if in_chrome and db_job["status"] == "new":
                     jobs_to_update_status_opened.append(norm_url)
                     db_job["status"] = "opened"
                     db_job["date_opened"] = datetime.now().isoformat()
                 
-                # Check status
                 if db_job["status"] in ("opened", "applied", "skipped"):
                     already_visited_list.append(job)
                 else:
                     new_jobs_list.append(job)
             else:
-                # Completely new job (not in DB and not in Chrome History)
                 if in_chrome:
                     job["status"] = "opened"
                     job["date_opened"] = datetime.now().isoformat()
                     jobs_to_insert.append(job)
                     already_visited_list.append(job)
                 else:
-                    # New job not visited yet. Save to db as 'new'.
                     job["status"] = "new"
                     jobs_to_insert.append(job)
                     new_jobs_list.append(job)
@@ -227,7 +227,8 @@ def main() -> None:
     jobs_needing_salary = [j for j in new_jobs_list if not j.get("salary")]
     dead_urls = []
     if jobs_needing_salary:
-        print(f"Investigating {len(jobs_needing_salary)} external links for salary range info...")
+        if print_output:
+            print(f"Investigating {len(jobs_needing_salary)} external links for salary range info...")
         def process_job_salary(job_dict):
             try:
                 salary = fetch_salary_from_url(job_dict["url"])
@@ -244,14 +245,14 @@ def main() -> None:
             list(executor.map(process_job_salary, jobs_needing_salary))
             
         if dead_urls:
-            print(f"Detected {len(dead_urls)} dead/closed job postings. Marking them as skipped.")
+            if print_output:
+                print(f"Detected {len(dead_urls)} dead/closed job postings. Marking them as skipped.")
             update_jobs_status_bulk(dead_urls, "skipped")
             new_jobs_list = [j for j in new_jobs_list if j["normalized_url"] not in dead_urls]
                      
     # Perform database write operations
     newly_added_count = len(jobs_to_insert)
     if jobs_to_insert:
-        # Filter out dead jobs from initial insert if they were found to be dead during this run
         jobs_to_insert = [j for j in jobs_to_insert if j["normalized_url"] not in dead_urls]
         insert_jobs(jobs_to_insert)
         newly_added_count = len(jobs_to_insert)
@@ -265,39 +266,37 @@ def main() -> None:
     applied_count = sum(1 for j in updated_tracked.values() if j["status"] == "applied")
     skipped_count = sum(1 for j in updated_tracked.values() if j["status"] == "skipped")
     
-    # Print Stdout Output
-    print("\n==============================")
-    print("NEW JOBS")
-    print("==============================")
-    for job in new_jobs_list:
-        print(f"\nCompany: {job['company']}")
-        print(f"Title: {job['title']}")
-        print(f"Location: {job['location']}")
-        print(f"Repository: {job['repository']}")
-        print(f"Application URL: {job['url']}")
-        
-    print("\n==============================")
-    print("ALREADY VISITED")
-    print("==============================")
-    # Group by repository to preserve order
-    for job in already_visited_list:
-        print(f"\nCompany: {job['company']}")
-        print(f"Title: {job['title']}")
-        print(f"Repository: {job['repository']}")
-        
-    # Print Summary
-    print("\n==============================")
-    print("SUMMARY")
-    print("==============================")
-    print(f"Total jobs scraped:       {total_scraped}")
-    print(f"Duplicate jobs removed:   {total_removed}")
-    print(f"Brand new jobs added:     {newly_added_count}")
-    print(f"Already visited:          {len(already_visited_list)}")
-    print(f"Opened (in DB):           {opened_count}")
-    print(f"Applied (in DB):          {applied_count}")
-    print(f"Skipped (in DB):          {skipped_count}")
-    print(f"Total unvisited jobs:     {len(new_jobs_list)}")
-    print("==============================")
+    if print_output:
+        print("\n==============================")
+        print("NEW JOBS")
+        print("==============================")
+        for job in new_jobs_list:
+            print(f"\nCompany: {job['company']}")
+            print(f"Title: {job['title']}")
+            print(f"Location: {job['location']}")
+            print(f"Repository: {job['repository']}")
+            print(f"Application URL: {job['url']}")
+            
+        print("\n==============================")
+        print("ALREADY VISITED")
+        print("==============================")
+        for job in already_visited_list:
+            print(f"\nCompany: {job['company']}")
+            print(f"Title: {job['title']}")
+            print(f"Repository: {job['repository']}")
+            
+        print("\n==============================")
+        print("SUMMARY")
+        print("==============================")
+        print(f"Total jobs scraped:       {total_scraped}")
+        print(f"Duplicate jobs removed:   {total_removed}")
+        print(f"Brand new jobs added:     {newly_added_count}")
+        print(f"Already visited:          {len(already_visited_list)}")
+        print(f"Opened (in DB):           {opened_count}")
+        print(f"Applied (in DB):          {applied_count}")
+        print(f"Skipped (in DB):          {skipped_count}")
+        print(f"Total unvisited jobs:     {len(new_jobs_list)}")
+        print("==============================")
     
     # Generate/regenerate reports
     interacted_map = {}
@@ -316,6 +315,7 @@ def main() -> None:
             "salary": j.get("salary", ""),
             "age": j.get("age", ""),
             "url": j["url"],
+            "normalized_url": j["normalized_url"],
             "similar_status": interacted_map.get((j["company"].lower().strip(), j["title"].lower().strip()), "")
         }
         for j in new_jobs_list
@@ -323,18 +323,53 @@ def main() -> None:
     generate_csv(new_jobs_to_export)
     generate_html(new_jobs_to_export)
 
+    return {
+        "total_scraped": total_scraped,
+        "total_removed": total_removed,
+        "brand_new_added": newly_added_count,
+        "already_visited": len(already_visited_list),
+        "opened_count": opened_count,
+        "applied_count": applied_count,
+        "skipped_count": skipped_count,
+        "total_unvisited": len(new_jobs_list),
+        "jobs": new_jobs_to_export
+    }
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="JobTracker: Track and manage job applications.")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--daily", action="store_true", help="Run the daily workflow.")
+    group.add_argument("--open", action="store_true", help="Open all current NEW jobs in Chrome.")
+    group.add_argument("--export", action="store_true", help="Regenerate HTML and CSV outputs.")
+    group.add_argument("--mark-applied", action="store_true", help="Interactive prompt to mark opened jobs as applied.")
+    group.add_argument("--mark-skipped", action="store_true", help="Interactive prompt to mark opened jobs as skipped.")
+    parser.add_argument("--refresh", "--force-refresh", action="store_true", help="Force redownload of repository markdown files, ignoring the 6-hour cache.")
+    args = parser.parse_args()
+    
+    # Handle status management commands directly
+    if args.mark_applied:
+        run_status_management("applied")
+        return
+    if args.mark_skipped:
+        run_status_management("skipped")
+        return
+    if args.export:
+        run_export()
+        return
+
+    # Execute fetch pipeline
+    res = run_fetch_pipeline(force_refresh=args.refresh, print_output=True)
+    new_jobs_list = res["jobs"]
+
     # Handle --open flag or --daily interactive prompts
     if args.open:
         urls_to_open = [job["url"] for job in new_jobs_list]
         open_urls_in_chrome(urls_to_open)
-        # Bulk update their status to opened
         norm_urls = [job["normalized_url"] for job in new_jobs_list]
-        # Insert them if they weren't stored (e.g. if we are on first run and didn't insert new jobs)
-        # Make sure they are in DB
         for job in new_jobs_list:
             job["status"] = "opened"
             job["date_opened"] = datetime.now().isoformat()
-        insert_jobs(new_jobs_list) # insert or replace/ignore
+        insert_jobs(new_jobs_list)
         update_jobs_status_bulk(norm_urls, "opened", mark_opened=True)
         print(f"Marked {len(new_jobs_list)} jobs as 'opened' in applied.db.")
         
@@ -346,7 +381,6 @@ def main() -> None:
                 urls_to_open = [job["url"] for job in new_jobs_list]
                 open_urls_in_chrome(urls_to_open)
                 norm_urls = [job["normalized_url"] for job in new_jobs_list]
-                # Ensure they are saved in database with status 'opened'
                 for job in new_jobs_list:
                     job["status"] = "opened"
                     job["date_opened"] = datetime.now().isoformat()

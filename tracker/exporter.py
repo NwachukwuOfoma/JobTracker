@@ -483,6 +483,96 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             width: 100%;
         }}
 
+        .fetch-btn {{
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            color: #60a5fa;
+            padding: 0.6rem 1.4rem;
+            border-radius: 9999px;
+            font-weight: 700;
+            font-size: 0.92rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(12px);
+            font-family: inherit;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.15);
+        }}
+
+        .fetch-btn:hover {{
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.35) 0%, rgba(16, 185, 129, 0.35) 100%);
+            border-color: #60a5fa;
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.3);
+        }}
+
+        .fetch-btn:active {{
+            transform: translateY(0);
+        }}
+
+        .fetch-btn:disabled, .fetch-btn.loading {{
+            opacity: 0.75;
+            cursor: wait;
+            pointer-events: none;
+            border-color: rgba(59, 130, 246, 0.3);
+        }}
+
+        .fetch-btn.loading .fetch-icon {{
+            animation: spin 1s linear infinite;
+        }}
+
+        @keyframes spin {{
+            from {{ transform: rotate(0deg); }}
+            to {{ transform: rotate(360deg); }}
+        }}
+
+        .toast-notification {{
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            padding: 0.9rem 1.4rem;
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-size: 0.92rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(16px);
+            z-index: 10000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+            max-width: 440px;
+        }}
+        .toast-notification.show {{
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }}
+        .toast-notification.success {{
+            border-color: rgba(16, 185, 129, 0.5);
+            color: #34d399;
+        }}
+        .toast-notification.error {{
+            border-color: rgba(239, 68, 68, 0.5);
+            color: #f87171;
+        }}
+        .toast-notification code {{
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #93c5fd;
+        }}
+
         @media (max-width: 768px) {{
             .controls-panel {{
                 flex-direction: column;
@@ -504,6 +594,14 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             <h1>JobTracker Dashboard</h1>
             <div id="stats-container">
                 <span class="stats-badge" id="stats-badge">Loading...</span>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 0.75rem; margin-top: 1rem;">
+                <button class="fetch-btn" id="fetch-btn" onclick="triggerFetch()">
+                    <svg class="fetch-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    <span id="fetch-btn-text">Fetch New Jobs</span>
+                </button>
             </div>
         </header>
 
@@ -548,7 +646,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
     </div>
 
     <script>
-        const jobs = {jobs_json};
+        let jobs = {jobs_json};
         let activeTab = 'all';
         const undoStack = [];
         const disabledSections = new Set();
@@ -905,6 +1003,68 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
         searchInput.addEventListener('input', filterAndSortJobs);
         sortSelect.addEventListener('change', filterAndSortJobs);
+
+        async function triggerFetch() {{
+            const btn = document.getElementById('fetch-btn');
+            const btnText = document.getElementById('fetch-btn-text');
+            if (btn.classList.contains('loading')) return;
+
+            btn.classList.add('loading');
+            btnText.innerText = 'Fetching latest listings...';
+
+            const apiUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+                ? '/api/fetch'
+                : 'http://127.0.0.1:5050/api/fetch';
+
+            try {{
+                const response = await fetch(apiUrl, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }}
+                }});
+
+                if (response.status === 429) {{
+                    showToast('⚠️ A fetch is already in progress. Please wait a moment.', 'error');
+                    return;
+                }}
+
+                if (!response.ok) {{
+                    throw new Error(`HTTP ${{response.status}}`);
+                }}
+
+                const result = await response.json();
+                if (result.status === 'success' && result.data) {{
+                    const d = result.data;
+                    jobs = d.jobs;
+                    filterAndSortJobs();
+                    showToast(`✅ Fetch complete! Found ${{d.brand_new_added}} brand new jobs (${{d.total_unvisited}} unvisited)`, 'success');
+                }} else {{
+                    showToast(`⚠️ Fetch error: ${{result.message || 'Unknown issue'}}`, 'error');
+                }}
+            }} catch (err) {{
+                console.error('Fetch error:', err);
+                showToast('⚠️ Local server not running! Run <code>python server.py</code> or <code>./setup_daemon.sh</code>.', 'error', 6000);
+            }} finally {{
+                btn.classList.remove('loading');
+                btnText.innerText = 'Fetch New Jobs';
+            }}
+        }}
+
+        function showToast(message, type = 'info', duration = 4000) {{
+            let toast = document.getElementById('toast-notification');
+            if (!toast) {{
+                toast = document.createElement('div');
+                toast.id = 'toast-notification';
+                toast.className = 'toast-notification';
+                document.body.appendChild(toast);
+            }}
+            toast.className = `toast-notification ${{type}} show`;
+            toast.innerHTML = message;
+
+            clearTimeout(window._toastTimeout);
+            window._toastTimeout = setTimeout(() => {{
+                toast.classList.remove('show');
+            }}, duration);
+        }}
 
         // Initial render
         renderDashboard(jobs);
