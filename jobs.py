@@ -16,8 +16,9 @@ from tracker.database import (
     init_db, get_tracked_jobs, insert_jobs,
     update_jobs_status_bulk, update_job_status, update_job_salary,
     update_jobs_salary_bulk, update_jobs_apply_url_bulk,
-    mark_jobs_duplicate, update_jobs_location_bulk
+    mark_jobs_duplicate, update_jobs_location_bulk, mark_ai_salary_checked
 )
+from tracker.salary_estimator import estimate_salaries
 from tracker.ats_resolver import resolve_apply_urls
 from tracker.scraper import scrape_all_jobs, fetch_salary_from_url
 from tracker.linkedin_fetcher import fetch_linkedin_jobs
@@ -492,6 +493,20 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
                     print(f"Found direct links for {len(apply_urls)} of them.")
             except Exception as e:
                 logger.warning(f"Direct apply link lookup failed: {e}")
+
+    # 7b2. Jobs still without a salary: have Claude search the web for the posted
+    #      range or an estimate (once per job; skipped when no API key is set up)
+    unpriced = [
+        j for j in get_tracked_jobs().values()
+        if j["status"] == "new" and not (j.get("salary") or "").strip() and not j.get("ai_salary_checked")
+    ]
+    if unpriced:
+        estimates = estimate_salaries(unpriced)
+        if estimates:
+            if print_output:
+                print(f"Looked up salaries online for {len(estimates)} job(s); found {sum(1 for v in estimates.values() if v)}.")
+            update_jobs_salary_bulk({u: s for u, s in estimates.items() if s})
+            mark_ai_salary_checked(list(estimates))
 
     # 7c. Drop jobs you've already seen under another link and merge duplicate listings
     cleanup_duplicate_jobs(print_output=print_output)

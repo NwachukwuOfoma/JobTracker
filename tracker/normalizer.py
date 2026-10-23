@@ -126,6 +126,9 @@ def _classify_salary(salary: str) -> Tuple[List[float], Optional[str]]:
     text = salary.lower()
     if _ANNUALIZED_MARKER in text:
         text = text.split(_ANNUALIZED_MARKER)[0]  # already annualized; read the annual part
+    head = text.split("(")[0]
+    if re.search(r"\d,?\d{3}", head):
+        text = head  # "$93,600 - $124,800 (Est., from $45/hr)": the note doesn't change the unit
     text = re.sub(r"(?<=\d),(?=\d)", "", text)
     values = [float(n) * (1000 if k else 1) for n, k in re.findall(r"(\d+(?:\.\d+)?)\s*(k?)\b", text)]
     if not values or max(values) < 10:

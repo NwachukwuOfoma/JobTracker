@@ -37,6 +37,8 @@ def init_db(db_path: Path = DB_PATH) -> None:
         cursor.execute("ALTER TABLE jobs ADD COLUMN apply_url TEXT")
     if "duplicate_of" not in existing_cols:
         cursor.execute("ALTER TABLE jobs ADD COLUMN duplicate_of TEXT")
+    if "ai_salary_checked" not in existing_cols:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN ai_salary_checked INTEGER")
     conn.commit()
     conn.close()
 
@@ -222,5 +224,15 @@ def update_jobs_location_bulk(locations: Dict[str, str], db_path: Path = DB_PATH
         "UPDATE jobs SET location = ? WHERE normalized_url = ?",
         [(loc, url) for url, loc in locations.items()],
     )
+    conn.commit()
+    conn.close()
+
+def mark_ai_salary_checked(normalized_urls: List[str], db_path: Path = DB_PATH) -> None:
+    """Records that an AI salary lookup ran for these jobs, so each job is only looked up once."""
+    if not normalized_urls:
+        return
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.executemany("UPDATE jobs SET ai_salary_checked = 1 WHERE normalized_url = ?", [(u,) for u in normalized_urls])
     conn.commit()
     conn.close()
