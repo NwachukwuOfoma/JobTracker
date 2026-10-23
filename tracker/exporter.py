@@ -630,6 +630,12 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                     </svg>
                     <span class="fetch-btn-text">Fetch LinkedIn Only</span>
                 </button>
+                <button class="fetch-btn" id="fetch-btn-boards" data-label="Fetch Company Boards" onclick="triggerFetch('boards')">
+                    <svg class="fetch-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    <span class="fetch-btn-text">Fetch Company Boards</span>
+                </button>
             </div>
         </header>
 
@@ -637,6 +643,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             <button class="tab-btn active" data-repo="all" onclick="setTab('all')">All Repositories</button>
             <button class="tab-btn" data-repo="github" onclick="setTab('github')">GitHub Jobs</button>
             <button class="tab-btn" data-repo="linkedin" onclick="setTab('linkedin')">LinkedIn Jobs</button>
+            <button class="tab-btn" data-repo="company-boards" onclick="setTab('company-boards')">Company Boards</button>
         </div>
         <div class="tabs-container sub-tabs" id="github-subtabs" hidden>
             <button class="tab-btn sub-tab-btn" data-repo="github" onclick="setTab('github')">All GitHub</button>
@@ -703,7 +710,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
         function setTab(tabName) {{
             activeTab = tabName;
-            const isGithub = !['all', 'linkedin'].includes(tabName);
+            const isGithub = !['all', 'linkedin', 'company-boards'].includes(tabName);
             document.querySelectorAll('.tab-btn').forEach(btn => {{
                 const repo = btn.getAttribute('data-repo');
                 // The top-level GitHub tab stays highlighted while any GitHub sub-tab is active
@@ -779,7 +786,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             if (activeTab !== 'all') {{
                 tabFiltered = visibleJobs.filter(job => {{
                     if (activeTab === 'github') {{
-                        return job.repository !== 'linkedin';
+                        return job.repository !== 'linkedin' && job.repository !== 'company-boards';
                     }}
                     if (activeTab === 'SimplifyJobs') {{
                         return job.repository.startsWith('SimplifyJobs');
@@ -803,6 +810,10 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                     title: "LinkedIn Opportunities",
                     categories: {{ "All Roles": [] }}
                 }},
+                "company-boards": {{
+                    title: "Company Job Boards",
+                    categories: {{ "All Roles": [] }}
+                }},
                 "2027-AI-College-Jobs": {{
                     title: "2027 AI College Jobs",
                     categories: {{ "FAANG": [], "Finance": [], "Other": [] }}
@@ -822,8 +833,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
             // Distribute jobs into groups
             tabFiltered.forEach(job => {{
-                if (job.repository === "linkedin") {{
-                    groups["linkedin"].categories["All Roles"].push(job);
+                if (job.repository === "linkedin" || job.repository === "company-boards") {{
+                    groups[job.repository].categories["All Roles"].push(job);
                 }} else if (job.repository === "2027-AI-College-Jobs") {{
                     const cat = job.category || "Other";
                     if (groups["2027-AI-College-Jobs"].categories[cat]) {{
@@ -917,7 +928,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                     // Add to nav buttons list
                     let buttonLabel = dispNameShort;
                     if (activeTab === 'all' || activeTab === 'github') {{
-                        const prefix = groupKey === "2027-AI-College-Jobs" ? "AI" : groupKey === "2027-SWE-College-Jobs" ? "SWE" : groupKey === "linkedin" ? "LinkedIn" : "Simplify";
+                        const prefix = groupKey === "2027-AI-College-Jobs" ? "AI" : groupKey === "2027-SWE-College-Jobs" ? "SWE" : groupKey === "linkedin" ? "LinkedIn" : groupKey === "company-boards" ? "Boards" : "Simplify";
                         buttonLabel = prefix + " - " + dispNameShort;
                     }}
                     navButtons.push({{

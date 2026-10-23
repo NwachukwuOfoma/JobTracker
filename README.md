@@ -170,8 +170,11 @@ pip install -r requirements.txt
    ```bash
    python jobs.py --source github     # GitHub boards only (about a second)
    python jobs.py --source linkedin   # LinkedIn only (about 30 seconds)
+   python jobs.py --source boards     # Company job boards only (about 35 seconds)
    ```
-   *The dashboard has matching Fetch All / GitHub Only / LinkedIn Only buttons. Add `--refresh` to bypass the cache and retry salary lookups for GitHub jobs.*
+   *The dashboard has matching Fetch All / GitHub Only / LinkedIn Only / Company Boards buttons. Add `--refresh` to bypass the cache and retry salary lookups for GitHub and company-board jobs.*
+
+   *Company boards are picked automatically: every company with a public Greenhouse, Lever, Ashby, Workday or SmartRecruiters board that showed up in your GitHub or LinkedIn results in the last 90 days is checked for recent US/remote AI/ML roles. Job aggregators, non-engineering titles and numbered senior levels are filtered out. All selected sources are fetched in parallel. (Workable is deliberately excluded: its API rate-limits automated use.)*
 
 6. **Direct Apply Links for LinkedIn Jobs:**
    *LinkedIn jobs are matched against GitHub boards and public Greenhouse / Lever / Ashby boards, so "Apply Now" goes straight to the employer when possible. For the rest, load the `chrome_extension/` folder in Chrome (`chrome://extensions` → Developer mode → Load unpacked): when a LinkedIn job is opened from the dashboard, it follows LinkedIn's "Apply" button to the company site.*

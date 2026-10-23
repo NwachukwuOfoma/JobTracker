@@ -159,7 +159,7 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
         query_params = parse_qs(parsed.query)
         force_refresh = query_params.get("refresh", ["false"])[0].lower() in ("true", "1", "yes")
         source = query_params.get("source", ["all"])[0].lower()
-        if source not in ("all", "github", "linkedin"):
+        if source not in ("all", "github", "linkedin", "boards"):
             source = "all"
 
         # Non-blocking lock check

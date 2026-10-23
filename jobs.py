@@ -21,7 +21,7 @@ from tracker.database import (
 from tracker.ats_resolver import resolve_apply_urls
 from tracker.scraper import scrape_all_jobs, fetch_salary_from_url
 from tracker.linkedin_fetcher import fetch_linkedin_jobs
-from tracker.indeed_fetcher import fetch_indeed_jobs
+from tracker.board_fetcher import fetch_board_jobs, REPOSITORY as BOARDS_REPOSITORY
 from tracker.exporter import generate_csv, generate_html
 
 logger = setup_logging()
@@ -236,28 +236,49 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
     source_filter = (source_filter or "all").lower()
     include_github = source_filter in ("all", "github")
     include_linkedin = source_filter in ("all", "linkedin")
+    include_boards = source_filter in ("all", "boards")
 
-    # 1. Scrape jobs from all repositories (GitHub boards)
-    scraped_jobs = []
-    if include_github:
+    # 1-2. Fetch every selected source at the same time; they're independent, so
+    #      "Fetch All" takes about as long as the slowest source rather than the sum.
+    def fetch_github():
         if print_output:
             print("Scraping job repositories...")
-        scraped_jobs = scrape_all_jobs(force_refresh=force_refresh)
-    
-    # 2. Fetch additional jobs from LinkedIn
-    linkedin_jobs = []
-    if include_linkedin:
+        return scrape_all_jobs(force_refresh=force_refresh)
+
+    def fetch_linkedin():
+        if print_output:
+            print("Fetching LinkedIn jobs...")
+        jobs = fetch_linkedin_jobs()
+        logger.info(f"Fetched {len(jobs)} LinkedIn jobs")
+        return jobs
+
+    def fetch_boards():
+        # Check the job boards of companies already seen in your feeds
+        if print_output:
+            print("Checking company job boards...")
+        return fetch_board_jobs(get_tracked_jobs())
+
+    sources = {
+        name: fn for name, fn, enabled in [
+            ("GitHub", fetch_github, include_github),
+            ("LinkedIn", fetch_linkedin, include_linkedin),
+            ("Company board", fetch_boards, include_boards),
+        ] if enabled
+    }
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {name: executor.submit(fn) for name, fn in sources.items()}
+    fetched = {}
+    for name, future in futures.items():
         try:
-            if print_output:
-                print("Fetching LinkedIn jobs...")
-            linkedin_jobs = fetch_linkedin_jobs()
-            if print_output:
-                logger.info(f"Fetched {len(linkedin_jobs)} LinkedIn jobs")
+            fetched[name] = future.result()
         except Exception as e:
-            logger.error(f"LinkedIn fetch failed: {e}")
-    
+            if name == "GitHub":
+                raise
+            logger.error(f"{name} fetch failed: {e}")
+            fetched[name] = []
+
     # Combine sources
-    scraped_jobs = scraped_jobs + linkedin_jobs
+    scraped_jobs = [job for jobs in fetched.values() for job in jobs]
     total_scraped = len(scraped_jobs)
 
     # Apply basic filters: exclude PhD and senior/lead/staff roles, and enforce salary floor
@@ -432,7 +453,11 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
         j for j in unvisited_jobs
         if not (j.get("salary") or "").strip()
         and j["normalized_url"] not in already_checked
-        and (include_linkedin if j.get("repository") == "linkedin" else include_github and force_refresh)
+        and (
+            include_linkedin if j.get("repository") == "linkedin"
+            else include_boards and force_refresh if j.get("repository") == BOARDS_REPOSITORY
+            else include_github and force_refresh
+        )
     ]
     if backfill_targets:
         if print_output:
@@ -568,7 +593,7 @@ def main() -> None:
     group.add_argument("--mark-applied", action="store_true", help="Interactive prompt to mark opened jobs as applied.")
     group.add_argument("--mark-skipped", action="store_true", help="Interactive prompt to mark opened jobs as skipped.")
     parser.add_argument("--refresh", "--force-refresh", action="store_true", help="Force redownload of repository markdown files, ignoring the 6-hour cache.")
-    parser.add_argument("--source", choices=["all", "github", "linkedin"], default="all", help="Which job source(s) to fetch from (default: all).")
+    parser.add_argument("--source", choices=["all", "github", "linkedin", "boards"], default="all", help="Which job source(s) to fetch from (default: all).")
     args = parser.parse_args()
     
     # Handle status management commands directly
