@@ -424,6 +424,22 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             opacity: 0.7;
         }}
 
+        .salary-ask {{
+            display: inline-block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border: 1px dashed var(--card-border);
+            border-radius: 9999px;
+            padding: 0.15rem 0.6rem;
+        }}
+
+        .salary-ask:hover {{
+            color: var(--text-primary);
+            border-color: rgba(59, 130, 246, 0.6);
+        }}
+
         .salary-badge {{
             display: inline-flex;
             align-items: center;
@@ -943,7 +959,9 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                         const card = document.createElement('div');
                         card.className = 'job-card';
                         
-                        const salaryBadge = job.salary ? `<span class="salary-badge">💵 ${{escapeHtml(job.salary)}}</span>` : '';
+                        const salaryBadge = job.salary
+                            ? `<span class="salary-badge">💵 ${{escapeHtml(job.salary)}}</span>`
+                            : `<a class="salary-ask" href="${{salarySearchUrl(job)}}" target="_blank" rel="noopener noreferrer" title="Search Google AI Mode for this role's salary">🔎 Ask AI about salary</a>`;
                         const ageBadge = job.age ? `<span class="age-badge">📅 ${{escapeHtml(job.age)}}</span>` : '';
                         
                         let warningBadge = '';
@@ -1024,6 +1042,14 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             if (job.apply_url) return job.apply_url;
             if (job.repository === 'linkedin') return job.url + '#jobtracker-apply';
             return job.url;
+        }}
+
+        // Google AI Mode search for a job's pay, the same query you'd type by hand:
+        // "<company> <title> <first location> salary"
+        function salarySearchUrl(job) {{
+            const location = (job.location || '').split(' / ')[0];
+            const query = `${{job.company}} ${{job.title}} ${{location}} salary`;
+            return 'https://www.google.com/search?udm=50&q=' + encodeURIComponent(query);
         }}
 
         function filterAndSortJobs() {{

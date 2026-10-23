@@ -301,6 +301,14 @@ def fetch_salary_from_url(url: str) -> str:
                 api_res = requests.get(api_url, headers=headers, timeout=5)
                 if api_res.status_code == 200:
                     data = api_res.json()
+                    # Lever's structured pay field, e.g. {"min": 90000, "max": 125000, "interval": "per-year-salary"}
+                    salary_range = data.get("salaryRange") or {}
+                    if salary_range.get("min") and (salary_range.get("currency") or "USD") == "USD":
+                        interval = salary_range.get("interval") or ""
+                        factor = 12 if "month" in interval else 1
+                        lo, hi = salary_range["min"] * factor, (salary_range.get("max") or salary_range["min"]) * factor
+                        suffix = "/hr" if "hour" in interval else ""
+                        return f"${lo:,.0f} - ${hi:,.0f}{suffix}" if hi != lo else f"${lo:,.0f}{suffix}"
                     desc_html = (data.get("descriptionPlain") or data.get("description") or "")
                     lists = data.get("lists")
                     if isinstance(lists, list):
