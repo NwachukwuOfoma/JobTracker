@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 from tracker.config import DB_PATH, setup_logging
+from tracker.normalizer import annualize_salary
 
 logger = setup_logging()
 
@@ -23,12 +24,21 @@ def init_db(db_path: Path = DB_PATH) -> None:
             age TEXT,
             date_first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             date_opened TIMESTAMP,
-            status TEXT NOT NULL CHECK(status IN ('new', 'opened', 'applied', 'skipped'))
+            status TEXT NOT NULL CHECK(status IN ('new', 'opened', 'applied', 'skipped')),
+            source TEXT NOT NULL DEFAULT 'github'
         )
     """)
+    # Auto-migrate any missing columns if table already existed
+    cursor.execute("PRAGMA table_info(jobs)")
+    existing_cols = {row[1] for row in cursor.fetchall()}
+    if "source" not in existing_cols:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN source TEXT NOT NULL DEFAULT 'github'")
+    if "apply_url" not in existing_cols:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN apply_url TEXT")
+    if "duplicate_of" not in existing_cols:
+        cursor.execute("ALTER TABLE jobs ADD COLUMN duplicate_of TEXT")
     conn.commit()
     conn.close()
-    logger.info("Database initialized successfully.")
 
 def get_tracked_jobs(db_path: Path = DB_PATH) -> Dict[str, Dict[str, Any]]:
     """Loads all tracked jobs from the database and returns them as a dictionary keyed by normalized_url."""
@@ -63,8 +73,8 @@ def insert_jobs(jobs: List[Dict[str, Any]], db_path: Path = DB_PATH) -> None:
         try:
             cursor.execute("""
                 INSERT OR IGNORE INTO jobs (
-                    normalized_url, original_url, company, title, location, repository, category, salary, age, date_first_seen, date_opened, status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    normalized_url, original_url, company, title, location, repository, category, salary, age, date_first_seen, date_opened, status, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 job["normalized_url"],
                 job["url"],
@@ -73,11 +83,12 @@ def insert_jobs(jobs: List[Dict[str, Any]], db_path: Path = DB_PATH) -> None:
                 job["location"],
                 job["repository"],
                 job.get("category", "Other"),
-                job.get("salary", ""),
+                annualize_salary(job.get("salary", "")),
                 job.get("age", ""),
                 job.get("date_first_seen", now_str),
                 job.get("date_opened"),
-                job.get("status", "new")
+                job.get("status", "new"),
+                job.get("source", "github")
             ))
         except Exception as e:
             logger.error(f"Error inserting job {job.get('url')}: {e}")
@@ -140,9 +151,76 @@ def update_job_salary(normalized_url: str, salary: str, db_path: Path = DB_PATH)
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute("""
-        UPDATE jobs 
+        UPDATE jobs
         SET salary = ?
         WHERE normalized_url = ?
-    """, (salary, normalized_url))
+    """, (annualize_salary(salary), normalized_url))
+    conn.commit()
+    conn.close()
+
+def update_jobs_salary_bulk(normalized_salary: Dict[str, str], db_path: Path = DB_PATH) -> None:
+    """Updates the salary for multiple jobs at once.
+
+    Only upserts when the incoming salary is non-empty, so a transient failed
+    fetch never wipes out a salary that was previously collected.
+    """
+    if not normalized_salary:
+        return
+
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    payload = [(annualize_salary(sal), url) for url, sal in normalized_salary.items() if sal and sal.strip()]
+    payload = [(sal, url) for sal, url in payload if sal]
+    if not payload:
+        conn.close()
+        return
+
+    cursor.executemany("""
+        UPDATE jobs
+        SET salary = ?
+        WHERE normalized_url = ?
+    """, payload)
+
+    conn.commit()
+    conn.close()
+
+def update_jobs_apply_url_bulk(apply_urls: Dict[str, str], db_path: Path = DB_PATH) -> None:
+    """Stores the employer's direct application link for jobs found via an aggregator (e.g. LinkedIn)."""
+    if not apply_urls:
+        return
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.executemany(
+        "UPDATE jobs SET apply_url = ? WHERE normalized_url = ?",
+        [(url, norm) for norm, url in apply_urls.items()],
+    )
+    conn.commit()
+    conn.close()
+
+def mark_jobs_duplicate(duplicates: Dict[str, str], db_path: Path = DB_PATH) -> None:
+    """Skips each job in {duplicate_url: kept_url}, remembering which job it duplicates."""
+    if not duplicates:
+        return
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.executemany(
+        "UPDATE jobs SET status = 'skipped', duplicate_of = ? WHERE normalized_url = ?",
+        [(kept, dup) for dup, kept in duplicates.items()],
+    )
+    conn.commit()
+    conn.close()
+
+def update_jobs_location_bulk(locations: Dict[str, str], db_path: Path = DB_PATH) -> None:
+    """Sets the location for multiple jobs, keyed by normalized_url."""
+    if not locations:
+        return
+    init_db(db_path)
+    conn = sqlite3.connect(db_path)
+    conn.executemany(
+        "UPDATE jobs SET location = ? WHERE normalized_url = ?",
+        [(loc, url) for url, loc in locations.items()],
+    )
     conn.commit()
     conn.close()

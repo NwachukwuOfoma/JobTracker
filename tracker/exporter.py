@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Any
 from tracker.config import BASE_DIR, setup_logging
+from tracker.normalizer import parse_annual_salary
 
 logger = setup_logging()
 
@@ -21,6 +22,11 @@ def generate_csv(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR / 
 
 def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR / "new_jobs.html") -> None:
     """Generates a modern, responsive HTML page to browse new jobs."""
+    # Annual salary (top of range) computed once in Python so the dashboard's
+    # sort uses the same hourly/"missing K" rules as the salary floor.
+    for job in new_jobs:
+        parsed = parse_annual_salary(job.get("salary") or "")
+        job["salary_value"] = parsed[1] if parsed else 0
     jobs_json = json.dumps(new_jobs)
     
     html_content = f"""<!DOCTYPE html>
@@ -165,6 +171,16 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             border-color: var(--accent);
             color: white;
             box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }}
+
+        .sub-tabs {{
+            margin-top: -1.25rem;
+            gap: 0.5rem;
+        }}
+
+        .sub-tab-btn {{
+            padding: 0.4rem 0.95rem;
+            font-size: 0.8rem;
         }}
 
         /* Search and Filter Panel */
@@ -595,21 +611,38 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             <div id="stats-container">
                 <span class="stats-badge" id="stats-badge">Loading...</span>
             </div>
-            <div style="display: flex; justify-content: center; gap: 0.75rem; margin-top: 1rem;">
-                <button class="fetch-btn" id="fetch-btn" onclick="triggerFetch()">
+            <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
+                <button class="fetch-btn" id="fetch-btn-all" data-label="Fetch All Jobs" onclick="triggerFetch('all')">
                     <svg class="fetch-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
                     </svg>
-                    <span id="fetch-btn-text">Fetch New Jobs</span>
+                    <span class="fetch-btn-text">Fetch All Jobs</span>
+                </button>
+                <button class="fetch-btn" id="fetch-btn-github" data-label="Fetch GitHub Only" onclick="triggerFetch('github')">
+                    <svg class="fetch-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    <span class="fetch-btn-text">Fetch GitHub Only</span>
+                </button>
+                <button class="fetch-btn" id="fetch-btn-linkedin" data-label="Fetch LinkedIn Only" onclick="triggerFetch('linkedin')">
+                    <svg class="fetch-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    <span class="fetch-btn-text">Fetch LinkedIn Only</span>
                 </button>
             </div>
         </header>
 
         <div class="tabs-container">
             <button class="tab-btn active" data-repo="all" onclick="setTab('all')">All Repositories</button>
-            <button class="tab-btn" data-repo="2027-AI-College-Jobs" onclick="setTab('2027-AI-College-Jobs')">2027 AI College Jobs</button>
-            <button class="tab-btn" data-repo="SimplifyJobs" onclick="setTab('SimplifyJobs')">SimplifyJobs</button>
-            <button class="tab-btn" data-repo="2027-SWE-College-Jobs" onclick="setTab('2027-SWE-College-Jobs')">2027 SWE College Jobs</button>
+            <button class="tab-btn" data-repo="github" onclick="setTab('github')">GitHub Jobs</button>
+            <button class="tab-btn" data-repo="linkedin" onclick="setTab('linkedin')">LinkedIn Jobs</button>
+        </div>
+        <div class="tabs-container sub-tabs" id="github-subtabs" hidden>
+            <button class="tab-btn sub-tab-btn" data-repo="github" onclick="setTab('github')">All GitHub</button>
+            <button class="tab-btn sub-tab-btn" data-repo="2027-AI-College-Jobs" onclick="setTab('2027-AI-College-Jobs')">2027 AI College Jobs</button>
+            <button class="tab-btn sub-tab-btn" data-repo="SimplifyJobs" onclick="setTab('SimplifyJobs')">SimplifyJobs</button>
+            <button class="tab-btn sub-tab-btn" data-repo="2027-SWE-College-Jobs" onclick="setTab('2027-SWE-College-Jobs')">2027 SWE College Jobs</button>
         </div>
 
         <div class="undo-container">
@@ -670,13 +703,16 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
         function setTab(tabName) {{
             activeTab = tabName;
+            const isGithub = !['all', 'linkedin'].includes(tabName);
             document.querySelectorAll('.tab-btn').forEach(btn => {{
-                if (btn.getAttribute('data-repo') === tabName) {{
-                    btn.classList.add('active');
-                }} else {{
-                    btn.classList.remove('active');
-                }}
+                const repo = btn.getAttribute('data-repo');
+                // The top-level GitHub tab stays highlighted while any GitHub sub-tab is active
+                const isActive = btn.classList.contains('sub-tab-btn')
+                    ? repo === tabName
+                    : repo === tabName || (repo === 'github' && isGithub);
+                btn.classList.toggle('active', isActive);
             }});
+            document.getElementById('github-subtabs').hidden = !isGithub;
             filterAndSortJobs();
         }}
 
@@ -742,6 +778,9 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             let tabFiltered = visibleJobs;
             if (activeTab !== 'all') {{
                 tabFiltered = visibleJobs.filter(job => {{
+                    if (activeTab === 'github') {{
+                        return job.repository !== 'linkedin';
+                    }}
                     if (activeTab === 'SimplifyJobs') {{
                         return job.repository.startsWith('SimplifyJobs');
                     }}
@@ -760,6 +799,10 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
             // Structured groupings mimicking target repositories
             const groups = {{
+                "linkedin": {{
+                    title: "LinkedIn Opportunities",
+                    categories: {{ "All Roles": [] }}
+                }},
                 "2027-AI-College-Jobs": {{
                     title: "2027 AI College Jobs",
                     categories: {{ "FAANG": [], "Finance": [], "Other": [] }}
@@ -779,7 +822,9 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
             // Distribute jobs into groups
             tabFiltered.forEach(job => {{
-                if (job.repository === "2027-AI-College-Jobs") {{
+                if (job.repository === "linkedin") {{
+                    groups["linkedin"].categories["All Roles"].push(job);
+                }} else if (job.repository === "2027-AI-College-Jobs") {{
                     const cat = job.category || "Other";
                     if (groups["2027-AI-College-Jobs"].categories[cat]) {{
                         groups["2027-AI-College-Jobs"].categories[cat].push(job);
@@ -798,6 +843,14 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                     }} else {{
                         groups["2027-SWE-College-Jobs"].categories["Other"].push(job);
                     }}
+                }} else {{
+                    if (!groups[job.repository]) {{
+                        groups[job.repository] = {{
+                            title: job.repository.toUpperCase(),
+                            categories: {{ "Other": [] }}
+                        }};
+                    }}
+                    groups[job.repository].categories["Other"].push(job);
                 }}
             }});
 
@@ -863,8 +916,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
                     // Add to nav buttons list
                     let buttonLabel = dispNameShort;
-                    if (activeTab === 'all') {{
-                        const prefix = groupKey === "2027-AI-College-Jobs" ? "AI" : (groupKey === "2027-SWE-College-Jobs" ? "SWE" : "Simplify");
+                    if (activeTab === 'all' || activeTab === 'github') {{
+                        const prefix = groupKey === "2027-AI-College-Jobs" ? "AI" : groupKey === "2027-SWE-College-Jobs" ? "SWE" : groupKey === "linkedin" ? "LinkedIn" : "Simplify";
                         buttonLabel = prefix + " - " + dispNameShort;
                     }}
                     navButtons.push({{
@@ -907,7 +960,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                                     </div>
                                 </div>
                             </div>
-                            <a href="${{job.url}}" target="_blank" rel="noopener noreferrer" class="apply-btn" onclick="hideJob('${{job.url}}', 'apply')" onauxclick="if(event.button === 1) hideJob('${{job.url}}', 'apply')">Apply Now</a>
+                            <a href="${{applyHref(job)}}" target="_blank" rel="noopener noreferrer" class="apply-btn" onclick="hideJob('${{job.url}}', 'apply')" onauxclick="if(event.button === 1) hideJob('${{job.url}}', 'apply')">Apply Now</a>
                         `;
                         grid.appendChild(card);
                     }});
@@ -953,28 +1006,14 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                       .replace(/'/g, "&#039;");
         }}
 
-        function parseSalaryValue(salaryStr) {{
-            if (!salaryStr) return 0;
-            let cleaned = salaryStr.toLowerCase().replace(/,/g, '');
-            // Normalize periods used as thousand separators (e.g. 81.000 -> 81000)
-            cleaned = cleaned.replace(/\.([0-9]{3})\b/g, '$1');
-            // Convert abbreviations (e.g. 100k -> 100000)
-            cleaned = cleaned.replace(/([0-9.]+)\s*k/g, (match, num) => parseFloat(num) * 1000);
-            
-            let numbers = cleaned.match(/[0-9]+(?:\.[0-9]+)?/g);
-            if (!numbers || numbers.length === 0) return 0;
-            
-            let values = numbers.map(n => parseFloat(n));
-            
-            // Check if hourly and estimate yearly. Ignore 0.
-            let isHourly = cleaned.includes('hr') || cleaned.includes('hour') || values.some(v => v > 0 && v < 200);
-            if (isHourly) {{
-                values = values.map(v => v * 2000); // 2000 hours/yr
-            }}
-            
-            return Math.max(...values);
+        // Where "Apply Now" goes: the employer's own posting when we found one;
+        // otherwise LinkedIn jobs get a marker the JobTracker Chrome extension
+        // uses to jump from the LinkedIn page to the company's application.
+        function applyHref(job) {{
+            if (job.apply_url) return job.apply_url;
+            if (job.repository === 'linkedin') return job.url + '#jobtracker-apply';
+            return job.url;
         }}
-
 
         function filterAndSortJobs() {{
             const query = searchInput.value.toLowerCase().trim ? searchInput.value.toLowerCase().trim() : searchInput.value.toLowerCase();
@@ -991,9 +1030,9 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
             // 2. Separate/filter undefined salaries from sorted lists
             if (sortBy === 'salary-desc' || sortBy === 'salary-asc') {{
-                filtered = filtered.filter(job => job.salary && job.salary.trim() !== "");
+                filtered = filtered.filter(job => job.salary_value > 0);
             }} else if (sortBy === 'salary-undefined') {{
-                filtered = filtered.filter(job => !job.salary || job.salary.trim() === "");
+                filtered = filtered.filter(job => !(job.salary_value > 0));
             }}
 
             // 3. Sort
@@ -1002,9 +1041,9 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             }} else if (sortBy === 'location') {{
                 filtered.sort((a, b) => a.location.localeCompare(b.location));
             }} else if (sortBy === 'salary-desc') {{
-                filtered.sort((a, b) => parseSalaryValue(b.salary) - parseSalaryValue(a.salary));
+                filtered.sort((a, b) => b.salary_value - a.salary_value);
             }} else if (sortBy === 'salary-asc') {{
-                filtered.sort((a, b) => parseSalaryValue(a.salary) - parseSalaryValue(b.salary));
+                filtered.sort((a, b) => a.salary_value - b.salary_value);
             }}
 
             renderDashboard(filtered);
@@ -1022,17 +1061,20 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
         searchInput.addEventListener('input', filterAndSortJobs);
         sortSelect.addEventListener('change', filterAndSortJobs);
 
-        async function triggerFetch() {{
-            const btn = document.getElementById('fetch-btn');
-            const btnText = document.getElementById('fetch-btn-text');
+        async function triggerFetch(source = 'all') {{
+            const btn = document.getElementById('fetch-btn-' + source);
+            const btnText = btn.querySelector('.fetch-btn-text');
+            const allBtns = document.querySelectorAll('.fetch-btn');
             if (btn.classList.contains('loading')) return;
 
             btn.classList.add('loading');
+            allBtns.forEach(b => b.disabled = true);
             btnText.innerText = 'Fetching latest listings...';
 
-            const apiUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
-                ? '/api/fetch'
-                : 'http://127.0.0.1:5050/api/fetch';
+            const apiBase = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
+                ? ''
+                : 'http://127.0.0.1:5050';
+            const apiUrl = apiBase + '/api/fetch?source=' + encodeURIComponent(source);
 
             try {{
                 const response = await fetch(apiUrl, {{
@@ -1053,6 +1095,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                 if (result.status === 'success' && result.data) {{
                     const d = result.data;
                     jobs = d.jobs;
+                    // Sync any hidden/applied interactions from the server to ensure UI reflects current state
+                    await syncInteractionsWithServer();
                     filterAndSortJobs();
                     showToast(`✅ Fetch complete! Found ${{d.brand_new_added}} brand new jobs (${{d.total_unvisited}} unvisited)`, 'success');
                 }} else {{
@@ -1063,7 +1107,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                 showToast('⚠️ Local server not running! Run <code>python server.py</code> or <code>./setup_daemon.sh</code>.', 'error', 6000);
             }} finally {{
                 btn.classList.remove('loading');
-                btnText.innerText = 'Fetch New Jobs';
+                allBtns.forEach(b => b.disabled = false);
+                btnText.innerText = btn.dataset.label;
             }}
         }}
 

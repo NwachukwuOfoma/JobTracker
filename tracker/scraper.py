@@ -102,6 +102,12 @@ def fetch_salary_from_url(url: str) -> str:
                         text = soup.get_text(" ")
                     else:
                         text = json.dumps(data)
+                    # Append any compensation/salary fields present in the Workday payload
+                    jpi = data.get("jobPostingInfo", {})
+                    for key in ("compensation", "salary", "payRange", "salaryRange", "compensationGrade"):
+                        val = jpi.get(key)
+                        if val:
+                            text = text + " " + (val if isinstance(val, str) else json.dumps(val))
                 elif response.status_code in (400, 403, 404, 410, 422):
                     return "__DEAD__"
                 else:
@@ -132,6 +138,63 @@ def fetch_salary_from_url(url: str) -> str:
             else:
                 return ""
         elif "gh_jid=" in url and "greenhouse.io" not in url:
+            # Handle Greenhouse embedded jobs (e.g. mthree)
+            gh_jid_match = re.search(r'[?&]gh_jid=([0-9]+)', url)
+            if gh_jid_match:
+                job_id = gh_jid_match.group(1).strip()
+                if "sofi.com" in url:
+                    # SoFi custom WordPress careers API
+                    api_url = f"https://www.sofi.com/wp-json/api/careers/{job_id}/job/"
+                    api_res = requests.get(api_url, headers=headers, timeout=5)
+                    if api_res.status_code == 200:
+                        data = api_res.json()
+                        desc_html = data.get("content", "")
+                        soup = BeautifulSoup(desc_html, "html.parser")
+                        text = soup.get_text(" ")
+                    else:
+                        text = ""
+                elif "digitalocean.com" in url:
+                    # DigitalOcean custom Next.js careers page (using board token digitalocean98)
+                    api_url = f"https://api.greenhouse.io/v1/boards/digitalocean98/jobs/{job_id}"
+                    api_res = requests.get(api_url, headers=headers, timeout=5)
+                    if api_res.status_code == 200:
+                        import html
+                        data = api_res.json()
+                        desc_html = html.unescape(data.get("content", ""))
+                        soup = BeautifulSoup(desc_html, "html.parser")
+                        text = soup.get_text(" ")
+                    else:
+                        text = ""
+                else:
+                    response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                    if response.status_code == 200:
+                        token_match = re.search(r'greenhouse\.io/embed/job_board/[^?]+\?for=([^"\'&>]+)', response.text)
+                        if not token_match:
+                            token_match = re.search(r'boards\.greenhouse\.io/([^/"\'&>]+)', response.text)
+                        if token_match:
+                            board_token = token_match.group(1).strip()
+                            api_url = f"https://api.greenhouse.io/v1/boards/{board_token}/jobs/{job_id}"
+                            api_res = requests.get(api_url, headers=headers, timeout=5)
+                            if api_res.status_code == 200:
+                                import html
+                                data = api_res.json()
+                                desc_html = html.unescape(data.get("content", ""))
+                                soup = BeautifulSoup(desc_html, "html.parser")
+                                text = soup.get_text(" ")
+                            elif api_res.status_code in (400, 403, 404, 410, 422):
+                                return "__DEAD__"
+                            else:
+                                text = ""
+                        else:
+                            # Try to fetch directly from Greenhouse API with common patterns or just search in HTML
+                            soup = BeautifulSoup(response.text, "html.parser")
+                            text = soup.get_text(" ")
+                    elif response.status_code in (400, 403, 404, 410, 422):
+                        return "__DEAD__"
+                    else:
+                        text = ""
+            else:
+                text = ""
             # Handle Greenhouse embedded jobs (e.g. mthree)
             gh_jid_match = re.search(r'[?&]gh_jid=([0-9]+)', url)
             if gh_jid_match:
@@ -202,7 +265,67 @@ def fetch_salary_from_url(url: str) -> str:
                     text = ""
             else:
                 text = ""
-        elif "careers.oracle.com" in url or "oraclecloud.com" in url or "jobsearch/job/" in url:
+        elif "boards.greenhouse.io" in url or "job-boards.greenhouse.io" in url:
+            gh_match = re.search(r'/jobs/([0-9]+)', url)
+            if gh_match:
+                job_id = gh_match.group(1)
+                board_match = re.search(r'(?:job-boards\.)?greenhouse\.io/([^/]+)/', url)
+                board_token = board_match.group(1) if board_match else None
+                if board_token:
+                    api_url = f"https://api.greenhouse.io/v1/boards/{board_token}/jobs/{job_id}"
+                    api_res = requests.get(api_url, headers=headers, timeout=5)
+                    if api_res.status_code == 200:
+                        import html
+                        data = api_res.json()
+                        desc_html = html.unescape(data.get("content", "") or "")
+                        text = BeautifulSoup(desc_html, "html.parser").get_text(" ") + " " + json.dumps(data)
+                    elif api_res.status_code in (400, 403, 404, 410, 422):
+                        return "__DEAD__"
+                    else:
+                        response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                        if response.status_code in (404, 410): return "__DEAD__"
+                        text = response.text if response.status_code == 200 else ""
+                else:
+                    response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                    if response.status_code in (404, 410): return "__DEAD__"
+                    text = response.text if response.status_code == 200 else ""
+            else:
+                response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                if response.status_code in (404, 410): return "__DEAD__"
+                text = response.text if response.status_code == 200 else ""
+        elif "jobs.lever.co" in url:
+            lever_match = re.search(r'jobs\.lever\.co/([^/]+)/([a-f0-9-]+)', url)
+            if lever_match:
+                company, job_id = lever_match.groups()
+                api_url = f"https://api.lever.co/v0/postings/{company}/{job_id}?mode=json"
+                api_res = requests.get(api_url, headers=headers, timeout=5)
+                if api_res.status_code == 200:
+                    data = api_res.json()
+                    desc_html = (data.get("descriptionPlain") or data.get("description") or "")
+                    lists = data.get("lists")
+                    if isinstance(lists, list):
+                        for l in lists:
+                            desc_html += " " + (l.get("text") or "") + " " + " ".join(l.get("content") or [])
+                    soup = BeautifulSoup(str(desc_html), "html.parser")
+                    text = soup.get_text(" ") + " " + json.dumps(data)
+                elif api_res.status_code in (400, 403, 404, 410, 422):
+                    return "__DEAD__"
+                else:
+                    response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                    if response.status_code in (404, 410): return "__DEAD__"
+                    text = response.text if response.status_code == 200 else ""
+            else:
+                response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+                if response.status_code in (404, 410): return "__DEAD__"
+                text = response.text if response.status_code == 200 else ""
+        elif "jobs.ashbyhq.com" in url:
+            response = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+            if response.status_code in (404, 410): return "__DEAD__"
+            elif response.status_code != 200:
+                text = ""
+            else:
+                text = response.text
+        elif "smartrecruiters.com" in url:
             # Handle Oracle Recruiting Cloud / Candidate Experience
             job_id_match = re.search(r'/job/([0-9]+)', url)
             if job_id_match:
@@ -326,6 +449,22 @@ def fetch_salary_from_url(url: str) -> str:
                 
             text = soup.get_text(" ") + " " + json_ld_desc + " " + icims_desc + " " + meta_desc
         
+        # 0. Location-banded ranges (e.g. "Cambridge, MA: $218,700 - $249,600")
+        loc_banded = re.findall(
+            r'(?:[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)?)(?:,?\s+[A-Z]{2})?\s*:\s*\$\s*[\d,]+(?:\.\d+)?\s*(?:-|to|–|—)\s*\$\s*[\d,]+(?:\.\d+)?',
+            text,
+        )
+        if loc_banded:
+            # Deduplicate while preserving order
+            seen = set()
+            uniq = []
+            for m in loc_banded:
+                key = re.sub(r'\s+', ' ', m.strip())
+                if key not in seen:
+                    seen.add(key)
+                    uniq.append(key)
+            return " | ".join(uniq)
+
         # Look for USD salary ranges in text
         # Regex 1: Hourly ranges (e.g. $35.00 - $50.00 / hr or $60-$90 per hour)
         hourly_match = re.search(r'\$\s*[0-9]+(?:\.[0-9]+)?\s*(?:-|to|–|—)\s*\$\s*[0-9]+(?:\.[0-9]+)?\s*(?:/|per)\s*(?:hr|hour)', text, re.IGNORECASE)
@@ -381,6 +520,18 @@ def fetch_salary_from_url(url: str) -> str:
         if single_match:
             return re.sub(r'\s+', ' ', single_match.group(0).strip()) + " (Est.)"
             
+        # Generic fallback: collect any dollar range present in text
+        generic_ranges = re.findall(r'\$\s*[\d,]+(?:\.\d+)?\s*(?:-|to|–|—)\s*\$\s*[\d,]+(?:\.\d+)?', text)
+        if generic_ranges:
+            seen = set()
+            uniq = []
+            for m in generic_ranges:
+                key = re.sub(r'\s+', ' ', m.strip())
+                if key not in seen:
+                    seen.add(key)
+                    uniq.append(key)
+            return " | ".join(uniq)
+
     except Exception as e:
         logger.debug(f"Failed to fetch salary from external link '{url}': {e}")
         

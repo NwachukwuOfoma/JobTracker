@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "JobTracker LinkedIn Apply",
+  "version": "1.0",
+  "description": "When a LinkedIn job is opened from the JobTracker dashboard's Apply button, jumps straight to the company's application page.",
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/jobs/view/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

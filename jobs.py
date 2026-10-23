@@ -2,6 +2,8 @@ import sys
 import argparse
 import subprocess
 import webbrowser
+import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Set
@@ -9,12 +11,17 @@ from concurrent.futures import ThreadPoolExecutor
 
 from tracker.config import DB_PATH, setup_logging
 from tracker.chrome import get_chrome_history_urls
-from tracker.normalizer import normalize_url, deduplicate_jobs
+from tracker.normalizer import normalize_url, deduplicate_jobs, parse_annual_salary, job_identity_key
 from tracker.database import (
-    init_db, get_tracked_jobs, insert_jobs, 
-    update_jobs_status_bulk, update_job_status, update_job_salary
+    init_db, get_tracked_jobs, insert_jobs,
+    update_jobs_status_bulk, update_job_status, update_job_salary,
+    update_jobs_salary_bulk, update_jobs_apply_url_bulk,
+    mark_jobs_duplicate, update_jobs_location_bulk
 )
+from tracker.ats_resolver import resolve_apply_urls
 from tracker.scraper import scrape_all_jobs, fetch_salary_from_url
+from tracker.linkedin_fetcher import fetch_linkedin_jobs
+from tracker.indeed_fetcher import fetch_indeed_jobs
 from tracker.exporter import generate_csv, generate_html
 
 logger = setup_logging()
@@ -99,6 +106,91 @@ def run_status_management(target_status: str) -> None:
     except (KeyboardInterrupt, EOFError):
         print("\nAction cancelled.")
 
+def is_below_salary_floor(salary: str, floor: int = 110000) -> bool:
+    """True when a salary is known and its low end (annualized) is under the floor."""
+    parsed = parse_annual_salary(salary)
+    return parsed is not None and parsed[0] < floor
+
+def cleanup_duplicate_jobs(print_output: bool = True) -> Dict[str, int]:
+    """
+    Makes the unvisited list contain only jobs that are genuinely new to you:
+    1. A new job with the same company + title as one you've already applied to,
+       opened or skipped (e.g. a LinkedIn copy of a GitHub job) is skipped.
+    2. Several new copies of one role (LinkedIn posts one per city; the same job
+       can also come from GitHub and LinkedIn) are merged into a single card that
+       lists every location. The kept copy prefers a GitHub link, then a direct
+       employer link, then one with a salary.
+    Merged-away copies are marked skipped with duplicate_of set, so they never
+    come back and aren't mistaken for jobs you skipped yourself.
+    """
+    tracked = get_tracked_jobs()
+    key = lambda j: job_identity_key(j["company"], j["title"])
+
+    already_seen = {
+        key(j): j["normalized_url"] for j in tracked.values()
+        if j["status"] in ("applied", "opened", "skipped") and not j.get("duplicate_of")
+    }
+    duplicates: Dict[str, str] = {}
+    groups: Dict[tuple, List[Dict]] = {}
+    for j in tracked.values():
+        if j["status"] != "new":
+            continue
+        if key(j) in already_seen:
+            duplicates[j["normalized_url"]] = already_seen[key(j)]
+        else:
+            groups.setdefault(key(j), []).append(j)
+    previously_seen = len(duplicates)
+
+    merged_into: Dict[str, List[Dict]] = {}
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        group.sort(key=lambda j: (
+            j["repository"] == "linkedin",
+            not j.get("apply_url"),
+            not (j.get("salary") or "").strip(),
+            j.get("date_first_seen") or "",
+        ))
+        kept = group[0]
+        for dup in group[1:]:
+            duplicates[dup["normalized_url"]] = kept["normalized_url"]
+        merged_into[kept["normalized_url"]] = group[1:]
+    mark_jobs_duplicate(duplicates)
+
+    # Every kept card lists the locations of all the copies merged into it (now or in earlier runs)
+    def final_target(url: str) -> str:
+        seen = set()
+        while url not in seen:
+            seen.add(url)
+            nxt = duplicates.get(url) or (tracked.get(url) or {}).get("duplicate_of")
+            if not nxt:
+                break
+            url = nxt
+        return url
+
+    for j in tracked.values():
+        if not j.get("duplicate_of") or j["normalized_url"] in duplicates:
+            continue
+        target = final_target(j["duplicate_of"])
+        if target in tracked and tracked[target]["status"] == "new" and target not in duplicates:
+            merged_into.setdefault(target, []).append(j)
+    locations = {}
+    for kept_url, copies in merged_into.items():
+        parts = []
+        for j in [tracked[kept_url]] + copies:
+            for loc in (j.get("location") or "").split(" / "):
+                if loc.strip() and loc.strip() not in parts:
+                    parts.append(loc.strip())
+        combined = " / ".join(parts)
+        if combined != tracked[kept_url].get("location"):
+            locations[kept_url] = combined
+    update_jobs_location_bulk(locations)
+
+    if print_output and duplicates:
+        print(f"Skipped {previously_seen} job(s) you've already seen under another link; "
+              f"merged {len(duplicates) - previously_seen} duplicate listing(s) into {len(merged_into)} card(s).")
+    return {"previously_seen": previously_seen, "merged": len(duplicates) - previously_seen}
+
 def run_export() -> None:
     """Regenerates HTML and CSV from the current state of the database."""
     init_db()
@@ -119,37 +211,17 @@ def run_export() -> None:
             "salary": job.get("salary", ""),
             "age": job.get("age", ""),
             "url": job["original_url"],
+            "apply_url": job.get("apply_url") or "",
             "similar_status": interacted_map.get((job["company"].lower().strip(), job["title"].lower().strip()), "")
         }
-        for job in tracked.values() if job["status"] == "new"
+        for job in tracked.values()
+        if job["status"] == "new" and not is_below_salary_floor(job.get("salary") or "")
     ]
     generate_csv(new_jobs)
     generate_html(new_jobs)
     print(f"Export complete. {len(new_jobs)} new jobs exported to CSV/HTML.")
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="JobTracker: Track and manage job applications.")
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument("--daily", action="store_true", help="Run the daily workflow.")
-    group.add_argument("--open", action="store_true", help="Open all current NEW jobs in Chrome.")
-    group.add_argument("--export", action="store_true", help="Regenerate HTML and CSV outputs.")
-    group.add_argument("--mark-applied", action="store_true", help="Interactive prompt to mark opened jobs as applied.")
-    group.add_argument("--mark-skipped", action="store_true", help="Interactive prompt to mark opened jobs as skipped.")
-    parser.add_argument("--refresh", "--force-refresh", action="store_true", help="Force redownload of repository markdown files, ignoring the 6-hour cache.")
-    args = parser.parse_args()
-    
-    # Handle status management commands directly
-    if args.mark_applied:
-        run_status_management("applied")
-        return
-    if args.mark_skipped:
-        run_status_management("skipped")
-        return
-    if args.export:
-        run_export()
-        return
-
-def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -> Dict[str, Any]:
+def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, source_filter: str = None) -> Dict[str, Any]:
     """
     Executes the full job fetch pipeline:
     1. Ingests from all configured repositories
@@ -161,11 +233,63 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
     """
     init_db()
     
-    # 1. Scrape jobs from all repositories
-    if print_output:
-        print("Scraping job repositories...")
-    scraped_jobs = scrape_all_jobs(force_refresh=force_refresh)
+    source_filter = (source_filter or "all").lower()
+    include_github = source_filter in ("all", "github")
+    include_linkedin = source_filter in ("all", "linkedin")
+
+    # 1. Scrape jobs from all repositories (GitHub boards)
+    scraped_jobs = []
+    if include_github:
+        if print_output:
+            print("Scraping job repositories...")
+        scraped_jobs = scrape_all_jobs(force_refresh=force_refresh)
+    
+    # 2. Fetch additional jobs from LinkedIn
+    linkedin_jobs = []
+    if include_linkedin:
+        try:
+            if print_output:
+                print("Fetching LinkedIn jobs...")
+            linkedin_jobs = fetch_linkedin_jobs()
+            if print_output:
+                logger.info(f"Fetched {len(linkedin_jobs)} LinkedIn jobs")
+        except Exception as e:
+            logger.error(f"LinkedIn fetch failed: {e}")
+    
+    # Combine sources
+    scraped_jobs = scraped_jobs + linkedin_jobs
     total_scraped = len(scraped_jobs)
+
+    # Apply basic filters: exclude PhD and senior/lead/staff roles, and enforce salary floor
+    senior_keywords = ["senior", "sr.", "sr ", "staff", "lead", "principal", "director", "manager", "head of", "vp"]
+    filtered_jobs: List[Dict] = []
+    rejected_jobs: List[Dict] = []
+    for job in scraped_jobs:
+        rejected_jobs.append(job)  # removed again below if the job passes every filter
+        title_lower = job.get("title", "").lower()
+        company_lower = job.get("company", "").lower()
+        
+        # Exclude if PhD mentioned in title or company
+        if "phd" in title_lower or "phd" in company_lower:
+            continue
+            
+        # Exclude if Senior / Staff / Lead / Principal in title
+        if any(sk in title_lower for sk in senior_keywords):
+            continue
+
+        # Salary floor check (hourly rates are annualized before comparing)
+        if is_below_salary_floor(job.get('salary', '')):
+            continue
+        rejected_jobs.pop()
+        filtered_jobs.append(job)
+    scraped_jobs = filtered_jobs
+    total_scraped = len(scraped_jobs)
+
+    # Remember filtered-out LinkedIn listings (as skipped) so the LinkedIn
+    # fetcher treats them as already seen and stops paging early next run.
+    rejected_linkedin = [dict(j, status="skipped") for j in rejected_jobs if j.get("repository") == "linkedin"]
+    if rejected_linkedin:
+        insert_jobs(rejected_linkedin)
     
     # 2. Deduplicate based on normalized URLs
     deduped_scraped = deduplicate_jobs(scraped_jobs)
@@ -199,6 +323,8 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
                 jobs_to_insert.append(job)
                 already_visited_list.append(job)
             else:
+                job["status"] = "new"
+                jobs_to_insert.append(job)
                 new_jobs_list.append(job)
         else:
             if norm_url in tracked_jobs:
@@ -208,6 +334,10 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
                     db_job["status"] = "opened"
                     db_job["date_opened"] = datetime.now().isoformat()
                 
+                # Carry forward the existing DB salary if already found
+                if db_job.get("salary") and not job.get("salary"):
+                    job["salary"] = db_job["salary"]
+
                 if db_job["status"] in ("opened", "applied", "skipped"):
                     already_visited_list.append(job)
                 else:
@@ -223,60 +353,152 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
                     jobs_to_insert.append(job)
                     new_jobs_list.append(job)
                     
-    # Investigating missing salaries concurrently
-    jobs_needing_salary = [j for j in new_jobs_list if not j.get("salary")]
+    def investigate_salaries(job_dicts):
+        """Fetch missing salaries concurrently (with a light retry to ride out
+        transient auth walls) and return newly collected salaries plus dead URLs.
+        Dead postings and any salary below the $110k floor are filtered out."""
+        collected = {}
+        dead = []
+
+        def process(job):
+            url = job.get("url") or job.get("original_url") or ""
+            for _ in range(2):
+                try:
+                    salary = fetch_salary_from_url(url)
+                except Exception:
+                    return
+                if salary == "__DEAD__":
+                    dead.append(job["normalized_url"])
+                    return
+                if salary:
+                    collected[job["normalized_url"]] = salary
+                    logger.info(f"Found salary for {job.get('company', '?')}: {salary}")
+                    return
+                time.sleep(1.0)  # transient auth wall — brief backoff before retry
+
+        with ThreadPoolExecutor(max_workers=20) as executor:
+            list(executor.map(process, job_dicts))
+        return collected, dead
+
+    # 6. Fetch salaries for this scrape's new jobs so brand-new jobs arrive with
+    #    salary data and the dead/below-floor checks run on fresh data.
+    #    Only brand-new jobs (not yet in the DB) are checked here; existing
+    #    unvisited jobs are handled once by the backfill step below.
+    jobs_needing_salary = [
+        j for j in jobs_to_insert
+        if j.get("status") == "new" and not (j.get("salary") or "").strip()
+    ]
     dead_urls = []
     if jobs_needing_salary:
         if print_output:
             print(f"Investigating {len(jobs_needing_salary)} external links for salary range info...")
-        def process_job_salary(job_dict):
-            try:
-                salary = fetch_salary_from_url(job_dict["url"])
-                if salary == "__DEAD__":
-                    dead_urls.append(job_dict["normalized_url"])
-                elif salary:
-                    job_dict["salary"] = salary
-                    update_job_salary(job_dict["normalized_url"], salary)
-                    logger.info(f"Found salary for {job_dict['company']}: {salary}")
-            except Exception as e:
-                pass
+        collected, dead_urls = investigate_salaries(jobs_needing_salary)
+        for job in jobs_to_insert:
+            if job["normalized_url"] in collected and not (job.get("salary") or "").strip():
+                job["salary"] = collected[job["normalized_url"]]
 
-        with ThreadPoolExecutor(max_workers=20) as executor:
-            list(executor.map(process_job_salary, jobs_needing_salary))
-            
-        if dead_urls:
-            if print_output:
-                print(f"Detected {len(dead_urls)} dead/closed job postings. Marking them as skipped.")
-            update_jobs_status_bulk(dead_urls, "skipped")
-            new_jobs_list = [j for j in new_jobs_list if j["normalized_url"] not in dead_urls]
-                     
+    # Filter out jobs with an identified salary under 110k (display + insert)
+    below_salary_floor_urls = {j["normalized_url"] for j in new_jobs_list if is_below_salary_floor(j.get('salary') or '')}
+
+    if dead_urls:
+        if print_output:
+            print(f"Detected {len(dead_urls)} dead/closed job postings. Marking them as skipped.")
+        update_jobs_status_bulk(dead_urls, "skipped")
+
     # Perform database write operations
-    newly_added_count = len(jobs_to_insert)
+    # Dead and below-floor jobs are still stored (as skipped) so later fetches
+    # recognise them and don't re-scrape their pages every run.
+    for j in jobs_to_insert:
+        if j["normalized_url"] in dead_urls or j["normalized_url"] in below_salary_floor_urls:
+            j["status"] = "skipped"
+    newly_added_count = sum(1 for j in jobs_to_insert if j["status"] == "new")
     if jobs_to_insert:
-        jobs_to_insert = [j for j in jobs_to_insert if j["normalized_url"] not in dead_urls]
         insert_jobs(jobs_to_insert)
-        newly_added_count = len(jobs_to_insert)
     if jobs_to_update_status_opened:
         jobs_to_update_status_opened = [u for u in jobs_to_update_status_opened if u not in dead_urls]
         update_jobs_status_bulk(jobs_to_update_status_opened, "opened", mark_opened=True)
-        
-    # Get current statistics from the DB
+
+    # 7. Backfill missing salaries for EVERY unvisited job currently in the DB.
+    #    A link whose salary previously failed to collect (e.g. an intermittent
+    #    LinkedIn auth wall) is retried on each fetch instead of staying pinned
+    #    to the "Undefined Salary" bucket.
     updated_tracked = get_tracked_jobs()
+    unvisited_jobs = [j for j in updated_tracked.values() if j["status"] == "new"]
+    #    Only backfill jobs from the source(s) being fetched. GitHub postings that
+    #    simply don't list a salary would be re-scraped for nothing on every run,
+    #    so they're only retried on --refresh.
+    already_checked = {j["normalized_url"] for j in jobs_needing_salary}
+    backfill_targets = [
+        j for j in unvisited_jobs
+        if not (j.get("salary") or "").strip()
+        and j["normalized_url"] not in already_checked
+        and (include_linkedin if j.get("repository") == "linkedin" else include_github and force_refresh)
+    ]
+    if backfill_targets:
+        if print_output:
+            print(f"Backfilling salary for {len(backfill_targets)} unvisited job(s) missing a range...")
+        backfill_collected, backfill_dead = investigate_salaries(backfill_targets)
+        if backfill_collected:
+            update_jobs_salary_bulk(backfill_collected)
+        if backfill_dead:
+            update_jobs_status_bulk(backfill_dead, "skipped")
+        dead_update = dead_urls + backfill_dead
+    else:
+        dead_update = dead_urls
+
+    # 7b. Find the employer's own application link for unvisited LinkedIn jobs
+    #     (matched against GitHub boards and public Greenhouse/Lever/Ashby boards),
+    #     so "Apply Now" can skip the LinkedIn page.
+    if include_linkedin:
+        updated_tracked = get_tracked_jobs()
+        unresolved = [
+            j for j in updated_tracked.values()
+            if j["status"] == "new" and j["repository"] == "linkedin" and j.get("apply_url") is None
+        ]
+        if unresolved:
+            if print_output:
+                print(f"Looking up direct application links for {len(unresolved)} LinkedIn job(s)...")
+            others = [j for j in updated_tracked.values() if j["repository"] != "linkedin"]
+            try:
+                apply_urls = resolve_apply_urls(unresolved, others)
+                # Record "" for jobs with no match so they aren't looked up again every fetch
+                update_jobs_apply_url_bulk({j["normalized_url"]: apply_urls.get(j["normalized_url"], "") for j in unresolved})
+                if print_output:
+                    print(f"Found direct links for {len(apply_urls)} of them.")
+            except Exception as e:
+                logger.warning(f"Direct apply link lookup failed: {e}")
+
+    # 7c. Drop jobs you've already seen under another link and merge duplicate listings
+    cleanup_duplicate_jobs(print_output=print_output)
+
+    # 8. Re-load and build the export from ALL unvisited jobs (additive).
+    #    Only jobs that were explicitly discarded (skipped/applied) or opened are
+    #    excluded; a job that simply didn't reappear this scrape stays put.
+    updated_tracked = get_tracked_jobs()
+    dead_set = set(dead_update)
+    unvisited_jobs = [
+        j for j in updated_tracked.values()
+        if j["status"] == "new"
+        and j["normalized_url"] not in dead_set
+        and j["normalized_url"] not in below_salary_floor_urls
+        and not is_below_salary_floor(j.get('salary') or '')  # applies to every unvisited job, not just this scrape's
+    ]
+
     opened_count = sum(1 for j in updated_tracked.values() if j["status"] == "opened")
     applied_count = sum(1 for j in updated_tracked.values() if j["status"] == "applied")
     skipped_count = sum(1 for j in updated_tracked.values() if j["status"] == "skipped")
-    
+
     if print_output:
         print("\n==============================")
         print("NEW JOBS")
         print("==============================")
-        for job in new_jobs_list:
+        for job in unvisited_jobs:
             print(f"\nCompany: {job['company']}")
             print(f"Title: {job['title']}")
             print(f"Location: {job['location']}")
             print(f"Repository: {job['repository']}")
-            print(f"Application URL: {job['url']}")
-            
+            print(f"Application URL: {job.get('original_url') or job.get('url')}")
+
         print("\n==============================")
         print("ALREADY VISITED")
         print("==============================")
@@ -284,7 +506,7 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
             print(f"\nCompany: {job['company']}")
             print(f"Title: {job['title']}")
             print(f"Repository: {job['repository']}")
-            
+
         print("\n==============================")
         print("SUMMARY")
         print("==============================")
@@ -295,10 +517,11 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
         print(f"Opened (in DB):           {opened_count}")
         print(f"Applied (in DB):          {applied_count}")
         print(f"Skipped (in DB):          {skipped_count}")
-        print(f"Total unvisited jobs:     {len(new_jobs_list)}")
+        print(f"Total unvisited jobs:     {len(unvisited_jobs)}")
         print("==============================")
-    
-    # Generate/regenerate reports
+
+    # Generate/regenerate reports from the additive, DB-backed unvisited set so a
+    # fetch never drops a job that has not been explicitly discarded.
     interacted_map = {}
     for job in updated_tracked.values():
         if job["status"] in ("applied", "skipped", "opened"):
@@ -312,13 +535,14 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
             "location": j["location"],
             "repository": j["repository"],
             "category": j.get("category", "Other"),
-            "salary": j.get("salary", ""),
-            "age": j.get("age", ""),
-            "url": j["url"],
+            "salary": j.get("salary") or "",
+            "age": j.get("age") or "",
+            "url": j.get("original_url") or j.get("url"),
+            "apply_url": j.get("apply_url") or "",
             "normalized_url": j["normalized_url"],
             "similar_status": interacted_map.get((j["company"].lower().strip(), j["title"].lower().strip()), "")
         }
-        for j in new_jobs_list
+        for j in unvisited_jobs
     ]
     generate_csv(new_jobs_to_export)
     generate_html(new_jobs_to_export)
@@ -331,7 +555,7 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True) -
         "opened_count": opened_count,
         "applied_count": applied_count,
         "skipped_count": skipped_count,
-        "total_unvisited": len(new_jobs_list),
+        "total_unvisited": len(unvisited_jobs),
         "jobs": new_jobs_to_export
     }
 
@@ -344,6 +568,7 @@ def main() -> None:
     group.add_argument("--mark-applied", action="store_true", help="Interactive prompt to mark opened jobs as applied.")
     group.add_argument("--mark-skipped", action="store_true", help="Interactive prompt to mark opened jobs as skipped.")
     parser.add_argument("--refresh", "--force-refresh", action="store_true", help="Force redownload of repository markdown files, ignoring the 6-hour cache.")
+    parser.add_argument("--source", choices=["all", "github", "linkedin"], default="all", help="Which job source(s) to fetch from (default: all).")
     args = parser.parse_args()
     
     # Handle status management commands directly
@@ -358,7 +583,7 @@ def main() -> None:
         return
 
     # Execute fetch pipeline
-    res = run_fetch_pipeline(force_refresh=args.refresh, print_output=True)
+    res = run_fetch_pipeline(force_refresh=args.refresh, print_output=True, source_filter=args.source)
     new_jobs_list = res["jobs"]
 
     # Handle --open flag or --daily interactive prompts

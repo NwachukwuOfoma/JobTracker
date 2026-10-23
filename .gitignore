@@ -5,3 +5,10 @@ logs/
 cache/
 __pycache__/
 *.pyc
+
+# Local AI tool workspace
+.kilo/
+
+# Generated outputs (rebuilt on every fetch; reflect personal job search)
+new_jobs.csv
+new_jobs.html

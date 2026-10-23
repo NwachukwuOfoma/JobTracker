@@ -1,6 +1,6 @@
 import re
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional, Tuple
 from tracker.config import setup_logging
 
 logger = setup_logging()
@@ -107,3 +107,73 @@ def deduplicate_jobs(jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             logger.debug(f"Removing duplicate job for URL: {job.get('url')}")
             
     return deduplicated
+
+HOURS_PER_YEAR = 2080
+_ANNUALIZED_MARKER = "/yr (from "
+_HOURLY_RE = re.compile(r"\bh(?:ou)?r\b|hourly|/\s*h\b", re.IGNORECASE)
+
+def _classify_salary(salary: str) -> Tuple[List[float], Optional[str]]:
+    """
+    Extracts the dollar figures from a salary string and decides what unit they're in:
+    - "hourly":    an explicit hourly rate ("/hr", "per hour"), or bare numbers under 100
+                   ("$18.00 - $20.00")
+    - "thousands": bare numbers from 100 to 999, where the "K" was dropped ("$250 - $300")
+    - "annual":    anything else ("$130,000 - $150,000", "$168k/yr")
+    - None:        empty or placeholder values like "$0.00 - $0.00" or "$1 - $5"
+    """
+    if not salary:
+        return [], None
+    text = salary.lower()
+    if _ANNUALIZED_MARKER in text:
+        text = text.split(_ANNUALIZED_MARKER)[0]  # already annualized; read the annual part
+    text = re.sub(r"(?<=\d),(?=\d)", "", text)
+    values = [float(n) * (1000 if k else 1) for n, k in re.findall(r"(\d+(?:\.\d+)?)\s*(k?)\b", text)]
+    if not values or max(values) < 10:
+        return values, None
+    if _HOURLY_RE.search(text) or max(values) < 100:
+        return values, "hourly"
+    if max(values) < 1000:
+        return values, "thousands"
+    return values, "annual"
+
+def parse_annual_salary(salary: str) -> Optional[Tuple[float, float]]:
+    """Parses a salary string into an annual (low, high) range in dollars, or None."""
+    values, unit = _classify_salary(salary)
+    if unit is None:
+        return None
+    factor = {"hourly": HOURS_PER_YEAR, "thousands": 1000, "annual": 1}[unit]
+    return min(values) * factor, max(values) * factor
+
+def annualize_salary(salary: str) -> str:
+    """
+    Rewrites hourly and "K-less" salaries as an annual range (hourly ones keep the
+    original rate for reference). Annual salaries are left untouched, and
+    placeholder values become "".
+    """
+    if not salary or not salary.strip():
+        return ""
+    if _ANNUALIZED_MARKER in salary:
+        return salary
+    values, unit = _classify_salary(salary)
+    if unit is None:
+        return ""
+    if unit == "annual":
+        return salary
+    lo, hi = parse_annual_salary(salary)
+    annual = f"${lo:,.0f}" if lo == hi else f"${lo:,.0f} - ${hi:,.0f}"
+    if unit == "thousands":
+        return annual
+    original = salary.strip()
+    if not _HOURLY_RE.search(original):
+        original += "/hr"
+    return f"{annual}{_ANNUALIZED_MARKER}{original})"
+
+def job_identity_key(company: str, title: str) -> Tuple[str, str]:
+    """
+    A source-independent key for "the same job": the same role posted on LinkedIn
+    and on a GitHub board (or once per city on LinkedIn) has different URLs but
+    the same company and title. Legal suffixes and punctuation are ignored, so
+    "Reddit, Inc." and "Reddit" match.
+    """
+    company = re.sub(r"\b(inc|llc|ltd|corp|corporation|co|company)\b\.?", "", company.lower())
+    return re.sub(r"[^a-z0-9]", "", company), re.sub(r"[^a-z0-9]", "", title.lower())

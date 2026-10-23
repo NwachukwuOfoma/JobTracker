@@ -158,6 +158,9 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
 
         query_params = parse_qs(parsed.query)
         force_refresh = query_params.get("refresh", ["false"])[0].lower() in ("true", "1", "yes")
+        source = query_params.get("source", ["all"])[0].lower()
+        if source not in ("all", "github", "linkedin"):
+            source = "all"
 
         # Non-blocking lock check
         if not fetch_lock.acquire(blocking=False):
@@ -176,7 +179,7 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             last_fetch_info["status"] = "running"
             
             # Execute pipeline
-            result = run_fetch_pipeline(force_refresh=force_refresh, print_output=True)
+            result = run_fetch_pipeline(force_refresh=force_refresh, print_output=True, source_filter=source)
             
             last_fetch_info = {
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),

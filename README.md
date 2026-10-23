@@ -166,6 +166,16 @@ pip install -r requirements.txt
    python jobs.py --export
    ```
 
+5. **Fetch One Source Only:**
+   ```bash
+   python jobs.py --source github     # GitHub boards only (about a second)
+   python jobs.py --source linkedin   # LinkedIn only (about 30 seconds)
+   ```
+   *The dashboard has matching Fetch All / GitHub Only / LinkedIn Only buttons. Add `--refresh` to bypass the cache and retry salary lookups for GitHub jobs.*
+
+6. **Direct Apply Links for LinkedIn Jobs:**
+   *LinkedIn jobs are matched against GitHub boards and public Greenhouse / Lever / Ashby boards, so "Apply Now" goes straight to the employer when possible. For the rest, load the `chrome_extension/` folder in Chrome (`chrome://extensions` → Developer mode → Load unpacked): when a LinkedIn job is opened from the dashboard, it follows LinkedIn's "Apply" button to the company site.*
+
 ---
 
 ## 6. Design Principles
