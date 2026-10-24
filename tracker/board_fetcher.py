@@ -16,7 +16,7 @@ from tracker.scraper import is_us_or_remote
 logger = setup_logging()
 
 REPOSITORY = "company-boards"
-WORKDAY_COUNTRY_CACHE = BOARD_CACHE_PATH.parent / "workday_countries.json"
+WORKDAY_COUNTRY_CACHE = BOARD_CACHE_PATH.parent / "posting_countries.json"
 MAX_AGE_DAYS = 30  # same window as the LinkedIn search
 WATCHLIST_LOOKBACK_DAYS = 90  # companies seen in your feeds within this window are watched
 
@@ -166,10 +166,11 @@ def _lever(token: str) -> List[Dict]:
         if not title or not link:
             continue
         loc = post.select_one(".sort-by-location") or post.select_one(".workplaceTypes")
+        location = loc.get_text(strip=True) if loc else ""
         postings.append({
             "title": title.get_text(strip=True), "url": link["href"],
-            "location": loc.get_text(strip=True) if loc else "",
-            "posted": None, "salary": "",
+            "location": location, "posted": None, "salary": "",
+            "location_unverified": not location,
         })
     return postings
 
@@ -227,7 +228,30 @@ def _workday_country(url: str) -> Optional[str]:
         return None
     if any(_us_state_codes(", " + str(loc)) or US_EXPLICIT_RE.search(str(loc)) for loc in info.get("additionalLocations") or []):
         return "United States of America"  # primary office abroad, but also offered in the US
-    return (info.get("country") or {}).get("descriptor")
+    country = (info.get("country") or {}).get("descriptor")
+    if not country:
+        # Some postings leave "country" empty and only fill in the requisition location
+        country = (((info.get("jobRequisitionLocation") or {}).get("country")) or {}).get("descriptor")
+    return country
+
+def _lever_country(url: str) -> Optional[str]:
+    """Lever's board page sometimes shows no location; the posting's own record has a country code."""
+    m = re.search(r"jobs\.lever\.co/([^/]+)/([0-9a-f-]+)", url)
+    if not m:
+        return None
+    try:
+        data = requests.get(f"https://api.lever.co/v0/postings/{m.group(1)}/{m.group(2)}?mode=json", timeout=8).json()
+    except Exception:
+        return None
+    code = (data.get("country") or "").upper()
+    return "United States" if code == "US" else (code or None)
+
+def _posting_country(url: str) -> Optional[str]:
+    if "myworkdayjobs.com" in url:
+        return _workday_country(url)
+    if "jobs.lever.co" in url:
+        return _lever_country(url)
+    return None
 
 def _workday(token: str) -> List[Dict]:
     # The same search endpoint Workday's public career pages call. Results are
@@ -360,7 +384,8 @@ def fetch_board_jobs(tracked_jobs: Dict[str, Dict], max_workers: int = 48) -> Li
             p["company"], p["age"] = company, age
             candidates.append(p)
 
-    # Workday postings get their country checked on the posting itself, once each:
+    # Workday postings (and Lever ones with no location) get their country checked
+    # on the posting itself, once each:
     # results (including rejected non-US postings) are cached between fetches.
     try:
         country_cache = json.loads(WORKDAY_COUNTRY_CACHE.read_text())
@@ -371,7 +396,7 @@ def fetch_board_jobs(tracked_jobs: Dict[str, Dict], max_workers: int = 48) -> Li
         if p.get("location_unverified") and p["url"] not in country_cache and normalize_url(p["url"]) not in tracked_jobs
     ]
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for p, country in zip(unverified, executor.map(lambda p: _workday_country(p["url"]), unverified)):
+        for p, country in zip(unverified, executor.map(lambda p: _posting_country(p["url"]), unverified)):
             if country:
                 country_cache[p["url"]] = country
     try:
