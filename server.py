@@ -120,6 +120,24 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
             return
 
+        if parsed.path == "/api/normalize":
+            # Lets the Chrome extension tell whether a job is already open in a tab
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            urls = json.loads(body).get("urls", [])
+            normalized = {}
+            for url in urls:
+                try:
+                    normalized[url] = normalize_url(url)
+                except Exception:
+                    normalized[url] = url
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"normalized": normalized}).encode("utf-8"))
+            return
+
         if parsed.path == "/api/tab_scores":
             # The Chrome extension sends the URLs of every open tab; we answer with the
             # resume-fit score of each one we know as a job, so it can line them up

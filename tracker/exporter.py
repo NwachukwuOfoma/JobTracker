@@ -688,6 +688,9 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                 <button class="fetch-btn" id="arrange-tabs-btn" onclick="arrangeTabs()" title="Line up your open job tabs right after this one, best resume fit first">
                     <span class="fetch-btn-text">🗂️ Arrange Job Tabs</span>
                 </button>
+                <button class="fetch-btn" id="open-jobs-btn" onclick="openRemainingJobs()" title="Open every job shown below in background tabs, slotted in with your open job tabs by resume fit">
+                    <span class="fetch-btn-text" id="open-jobs-text">📂 Open Jobs in Tabs</span>
+                </button>
             </div>
         </header>
 
@@ -800,9 +803,11 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             if (undoStack.length === 0) return;
             const last = undoStack.pop();
             const key = last.action === 'apply' ? 'applied_locally' : 'hidden_urls';
-            
+            // A bulk "Open Jobs in Tabs" is undone in one step
+            const urls = last.urls || [last.url];
+
             const s = getLocalStorageSet(key);
-            s.delete(last.url);
+            urls.forEach(u => s.delete(u));
             saveLocalStorageSet(key, s);
             
             updateUndoState();
@@ -811,11 +816,11 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             const apiUrl = (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1'))
                 ? '/api/interact'
                 : 'http://127.0.0.1:5050/api/interact';
-            fetch(apiUrl, {{
+            urls.forEach(u => fetch(apiUrl, {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
-                body: JSON.stringify({{ url: last.url, action: 'undo' }})
-            }}).catch(() => {{}});
+                body: JSON.stringify({{ url: u, action: 'undo' }})
+            }}).catch(() => {{}}));
         }}
 
         function updateUndoState() {{
@@ -856,6 +861,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             }}
 
             statsBadge.textContent = `${{tabFiltered.length}} New Jobs Available`;
+            shownJobs = tabFiltered;
+            document.getElementById('open-jobs-text').textContent = `📂 Open ${{tabFiltered.length}} Jobs in Tabs`;
 
             // Structured groupings mimicking target repositories
             let groups = {{
@@ -1218,11 +1225,54 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
         // Asks the JobTracker Chrome extension to line up open job tabs by fit,
         // best right after this tab. Only the extension can move tabs safely.
+        // Jobs currently shown on the board (after tab, search and dismiss filters)
+        var shownJobs = [];  // var: renderDashboard may run before this line does
+
+        function needsExtension(minVersion) {{
+            const v = document.documentElement.dataset.jobtrackerExtension;
+            if (v && parseFloat(v) >= minVersion) return false;
+            showToast(`⚠️ Needs the JobTracker extension v${{minVersion}}: open <code>chrome://extensions</code>, click reload on JobTracker, then refresh this page.`, 'error', 8000);
+            return true;
+        }}
+
+        // Opens every job shown on the board in background tabs, best fit first,
+        // merged into your already-open job tabs; they then leave the board like
+        // "Apply Now" (one Undo brings them all back)
+        function openRemainingJobs() {{
+            if (needsExtension(1.2)) return;
+            const list = [...shownJobs].sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1));
+            if (!list.length) {{ showToast('No jobs on the board to open.', 'info'); return; }}
+            if (!confirm(`Open ${{list.length}} jobs in new tabs? They'll be lined up with your open job tabs by resume fit.`)) return;
+
+            const onDone = (event) => {{
+                if (event.source !== window || event.data?.type !== 'jobtracker-open-jobs-done') return;
+                window.removeEventListener('message', onDone);
+                const r = event.data.result;
+                if (r.error) {{ showToast(`⚠️ Couldn't open jobs: ${{escapeHtml(r.error)}}`, 'error', 6000); return; }}
+                const urls = list.map(j => j.url);
+                const s = getLocalStorageSet('applied_locally');
+                urls.forEach(u => s.add(u));
+                saveLocalStorageSet('applied_locally', s);
+                undoStack.push({{ action: 'apply', urls }});
+                updateUndoState();
+                filterAndSortJobs();
+                fetch('/api/sync_interactions', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ hidden_urls: [], applied_locally: urls }})
+                }}).catch(() => {{}});
+                const already = r.alreadyOpen ? ` (${{r.alreadyOpen}} were already open)` : '';
+                showToast(`✅ Opened ${{r.opened}} jobs${{already}}; ${{r.moved}} job tabs lined up by fit`, 'success', 6000);
+            }};
+            window.addEventListener('message', onDone);
+            window.postMessage({{
+                type: 'jobtracker-open-jobs',
+                jobs: list.map(j => ({{ url: applyHref(j), keys: [j.url, j.apply_url].filter(Boolean) }}))
+            }}, '*');
+        }}
+
         function arrangeTabs() {{
-            if (!document.documentElement.dataset.jobtrackerExtension) {{
-                showToast('⚠️ Needs the JobTracker extension (v1.1): open <code>chrome://extensions</code> and click reload on JobTracker, then refresh this page.', 'error', 8000);
-                return;
-            }}
+            if (needsExtension(1.1)) return;
             const onDone = (event) => {{
                 if (event.source !== window || event.data?.type !== 'jobtracker-arrange-tabs-done') return;
                 window.removeEventListener('message', onDone);
