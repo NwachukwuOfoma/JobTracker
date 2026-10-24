@@ -13,7 +13,9 @@ logger = setup_logging()
 # the same "<company> <title> <location> salary" lookup you'd do by hand.
 MODEL = "claude-haiku-5-5"
 MAX_SEARCHES_PER_JOB = 3
-MAX_WORKERS = 8
+# Each lookup reads ~50k tokens of search results; new API accounts are limited to
+# ~500k input tokens/minute, so more parallel lookups just wait on rate-limit retries
+MAX_WORKERS = 4
 
 # The background server (launchd) doesn't inherit your shell's environment, so the
 # key can also live in this private file, outside the repository.

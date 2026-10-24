@@ -55,9 +55,22 @@ US_EXPLICIT_RE = re.compile(r"\b(us|usa|u\.s\.|united states|americas|north amer
 US_STATE_RE = re.compile(r",\s*[A-Z]{2}\b")  # "New York, NY"
 
 def _is_us_location(location: str) -> bool:
-    if NON_US_RE.search(location or "") and not (US_EXPLICIT_RE.search(location) or US_STATE_RE.search(location)):
-        return False
+    if NON_US_RE.search(location or ""):
+        # ", IN" next to a foreign city is India, not Indiana
+        us_states = {m.group(0).strip(", ").upper() for m in US_STATE_RE.finditer(location)} - {"IN"}
+        if not (US_EXPLICIT_RE.search(location) or us_states):
+            return False
     return is_us_or_remote(location)
+
+# Workday locations are often bare city names, so also catch non-US roles by their titles:
+# German/French/Dutch/Spanish job terms and UK/EU programme names
+NON_US_TITLE_RE = re.compile(
+    r"werkstudent|praktikum|praktikant|abschlussarbeit|^\W*stage\b|\bstage\s*(?:de\b|d'|en\b|[-–:])|stagiaire|alternance|alternant|"
+    r"\(h/f\)|\(f/h\)|\(m/w/d\)|\(w/m/d\)|\(m/f/d\)|\(f/m/d\)|\bm/w/d\b|\bm/f/d\b|"
+    r"placement year|industrial placement|graduate scheme|\bbecario\b|\bpracticas\b|\btirocinio\b|"
+    r"\bingenieur\b|\bentwickler\b|\bstudent worker\b",
+    re.IGNORECASE,
+)
 
 # Job aggregators that repost other companies' listings
 AGGREGATOR_BOARDS = {"jobgether"}
@@ -192,6 +205,8 @@ def _smartrecruiters(token: str) -> List[Dict]:
             seen.add(j["id"])
             loc = j.get("location") or {}
             country = (loc.get("country") or "").upper()
+            if country and country != "US" and not loc.get("remote"):
+                continue  # SmartRecruiters gives a country code; skip non-US roles outright
             postings.append({
                 "title": j.get("name", ""), "url": f"https://jobs.smartrecruiters.com/{token}/{j['id']}",
                 "location": ("Remote, " if loc.get("remote") else "") + ", ".join(
@@ -263,7 +278,7 @@ def fetch_board_jobs(tracked_jobs: Dict[str, Dict], max_workers: int = 48) -> Li
     for (board, company), postings in zip(watchlist.items(), results):
         for p in postings:
             title = p["title"]
-            if not RELEVANT_TITLE_RE.search(title) or INTERN_RE.search(title) or NON_TECHNICAL_RE.search(title) or SENIOR_LEVEL_RE.search(title):
+            if not RELEVANT_TITLE_RE.search(title) or INTERN_RE.search(title) or NON_TECHNICAL_RE.search(title) or SENIOR_LEVEL_RE.search(title) or NON_US_TITLE_RE.search(title):
                 continue
             if p["posted"] and p["posted"] < cutoff:
                 continue
