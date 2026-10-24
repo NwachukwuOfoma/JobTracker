@@ -190,7 +190,8 @@ def _ashby(token: str) -> List[Dict]:
             continue  # Ashby gives each location's country; skip roles with no US location
         postings.append({
             "title": j["title"], "url": j["jobUrl"],
-            "location": "Remote" if j.get("isRemote") else j.get("location", ""),
+            # Keep the real location; "Remote" alone hid that e.g. a role is remote within Brazil
+            "location": (j.get("location") or "") + (" (Remote)" if j.get("isRemote") else ""),
             "posted": _parse_date(j.get("publishedAt")),
             "salary": ((j.get("compensation") or {}).get("compensationTierSummary") or ""),
         })
