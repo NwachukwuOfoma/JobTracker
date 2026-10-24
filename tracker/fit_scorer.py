@@ -32,9 +32,30 @@ DEALBREAKERS = {
     "active_clearance_required": "Active clearance required",
     "non_us_location": "Outside the US",
     "publications_required": "Publications required",
+    "five_plus_years_required": "5+ years required",
+    "senior_level": "Senior-level role",
 }
 # Bump when the scoring instructions change in a way that should re-score every job
-SCORING_VERSION = "2"
+SCORING_VERSION = "3"
+
+# Backstops applied to the model's flags, since it sometimes flags a dealbreaker
+# ("Active TS/SCI clearance", "8+ years") without also listing it as one
+_OBTAINABLE_RE = re.compile(r"\b(obtain|eligib|ability to)", re.I)
+_CLEARANCE_RE = re.compile(r"\b(active|current)\b.*\bclearance\b|\bts/sci\b|\btop secret\b|\bsecret\b", re.I)
+_YEARS_RE = re.compile(r"\b(\d{1,2})\s*(?:\+|-\s*\d+|to\s*\d+)?\s*\+?\s*(?:years?|yrs?)\b", re.I)
+_SENIOR_RE = re.compile(r"\b(senior|sr\.?|staff|principal|lead|mid-senior)\b", re.I)
+
+def _flag_dealbreakers(flags: List[str]) -> List[str]:
+    found = []
+    for flag in flags:
+        if _CLEARANCE_RE.search(flag) and not _OBTAINABLE_RE.search(flag):
+            found.append("active_clearance_required")
+        years = _YEARS_RE.search(flag)
+        if years and int(years.group(1)) >= 5:
+            found.append("five_plus_years_required")
+        if _SENIOR_RE.search(flag):
+            found.append("senior_level")
+    return found
 
 REPORT_TOOL = {
     "name": "report_fit",
@@ -130,6 +151,8 @@ Dealbreakers (only when the posting states them as hard requirements; "preferred
 - active_clearance_required: the candidate must already hold an active security clearance at hire. Roles where a clearance can be obtained after hire don't count.
 - non_us_location: the job is based outside the United States, or remote only from outside the US.
 - publications_required: a publication record (e.g. first-author papers at top venues) is required.
+- five_plus_years_required: the minimum required experience is 5 or more years (e.g. "5+ years", "5-7 years", "8+ years"). Not for 4 years or less, and not when the years are only preferred.
+- senior_level: the role itself is senior (Senior, Sr., Staff, Principal, Lead, or a level clearly above entry/mid, such as an engineer "3"/"4" ladder rung described as senior). Mentions of working with senior colleagues don't count.
 
 Call report_fit once."""
 
@@ -157,6 +180,7 @@ def _score_one(client, system: str, job: Dict, description: str) -> Optional[Dic
         if block.type == "tool_use":
             fit = dict(block.input)
             fit["score"] = max(0, min(100, int(fit["score"])))
+            fit["dealbreakers"] = list(dict.fromkeys(fit.get("dealbreakers", []) + _flag_dealbreakers(fit.get("flags", []))))
             fit["dealbreaker_labels"] = [f"Hidden: {DEALBREAKERS[d]}" for d in fit.get("dealbreakers", []) if d in DEALBREAKERS]
             return fit
     return None
