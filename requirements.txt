@@ -1,4 +1,5 @@
 requests>=2.31.0
 pandas>=2.0.0
 beautifulsoup4>=4.12.0
-anthropic>=1.0  # optional: automatic salary lookups
+anthropic>=1.0  # optional: automatic salary lookups and resume fit scores
+pypdf>=4.0  # optional: reading a PDF resume for fit scores

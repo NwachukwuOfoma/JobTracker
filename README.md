@@ -179,6 +179,9 @@ pip install -r requirements.txt
 6. **Direct Apply Links for LinkedIn Jobs:**
    *LinkedIn jobs are matched against GitHub boards and public Greenhouse / Lever / Ashby boards, so "Apply Now" goes straight to the employer when possible. For the rest, load the `chrome_extension/` folder in Chrome (`chrome://extensions` → Developer mode → Load unpacked): when a LinkedIn job is opened from the dashboard, it follows LinkedIn's "Apply" button to the company site.*
 
+7. **Resume Fit Scores:**
+   *Each unvisited job gets a 0–100 fit score against your resume (Claude Haiku reads the posting's description), shown as a 🎯 badge with a one-line reason and 🚩 flags for hard requirements your resume doesn't show (clearance, 5+ years, PhD). Pick "Sort by Resume Fit" on the dashboard. Nothing is hidden by the score. The newest PDF/Word file whose name starts with `RESUME_NAME` (set in `tracker/config.py` or the `JOBTRACKER_RESUME_NAME` environment variable; cover letters ignored) is used, and jobs are re-scored when it changes. Each job is scored once, during fetches, and needs the same API key as the salary lookups.*
+
 ---
 
 ## 6. Design Principles

@@ -453,6 +453,39 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             align-self: flex-start;
         }}
 
+        .fit-badge {{
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+            cursor: help;
+            border: 1px solid;
+        }}
+        .fit-high {{ background: rgba(139, 92, 246, 0.14); border-color: rgba(139, 92, 246, 0.35); color: #a78bfa; }}
+        .fit-mid {{ background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }}
+        .fit-low {{ background: rgba(148, 163, 184, 0.1); border-color: rgba(148, 163, 184, 0.25); color: #94a3b8; }}
+
+        .flag-badge {{
+            display: inline-flex;
+            align-items: center;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: #f87171;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+        }}
+
+        .fit-note {{
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            line-height: 1.35;
+        }}
+
         .badge-group {{
             display: flex;
             gap: 0.5rem;
@@ -682,6 +715,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             <div class="filter-group">
                 <select id="sort-select" class="sort-select">
                     <option value="none">Latest to Oldest (Default)</option>
+                    <option value="fit">Sort by Resume Fit (Best First)</option>
                     <option value="salary-desc">Sort by Salary (High to Low)</option>
                     <option value="salary-asc">Sort by Salary (Low to High)</option>
                     <option value="salary-undefined">Undefined Salary</option>
@@ -884,7 +918,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             // Company / location / salary sorts are global orderings, so show every job in
             // one list instead of splitting it by the board it came from
             const sortLabels = {{
-                'company': 'Company', 'location': 'Location',
+                'fit': 'Resume Fit', 'company': 'Company', 'location': 'Location',
                 'salary-desc': 'Salary (High to Low)', 'salary-asc': 'Salary (Low to High)',
             }};
             if (sortLabels[sortSelect.value]) {{
@@ -977,6 +1011,14 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                         const salaryBadge = job.salary
                             ? `<span class="salary-badge">💵 ${{escapeHtml(job.salary)}}</span>`
                             : `<a class="salary-ask" href="${{salarySearchUrl(job)}}" target="_blank" rel="noopener noreferrer" title="Search Google AI Mode for this role's salary">🔎 Ask AI about salary</a>`;
+                        let fitBadge = '', flagBadges = '', fitNote = '';
+                        if (job.fit_score !== null && job.fit_score !== undefined) {{
+                            const tier = job.fit_score >= 70 ? 'fit-high' : (job.fit_score >= 45 ? 'fit-mid' : 'fit-low');
+                            fitBadge = `<span class="fit-badge ${{tier}}" title="${{escapeHtml(job.fit_note || '')}}">🎯 Fit ${{job.fit_score}}</span>`;
+                            flagBadges = (job.fit_flags || '').split('; ').filter(Boolean)
+                                .map(f => `<span class="flag-badge" title="Requirement your resume doesn't show">🚩 ${{escapeHtml(f)}}</span>`).join('');
+                            if (job.fit_note) fitNote = `<div class="fit-note">${{escapeHtml(job.fit_note)}}</div>`;
+                        }}
                         const ageBadge = job.age ? `<span class="age-badge">📅 ${{escapeHtml(job.age)}}</span>` : '';
                         
                         let warningBadge = '';
@@ -998,10 +1040,13 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                                         <span>${{escapeHtml(job.location)}}</span>
                                     </div>
                                     <div class="badge-group">
+                                        ${{fitBadge}}
                                         ${{salaryBadge}}
                                         ${{ageBadge}}
                                         ${{warningBadge}}
+                                        ${{flagBadges}}
                                     </div>
+                                    ${{fitNote}}
                                 </div>
                             </div>
                             <a href="${{applyHref(job)}}" target="_blank" rel="noopener noreferrer" class="apply-btn" onclick="hideJob('${{job.url}}', 'apply')" onauxclick="if(event.button === 1) hideJob('${{job.url}}', 'apply')">Apply Now</a>
@@ -1088,7 +1133,11 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             }}
 
             // 3. Sort
-            if (sortBy === 'company') {{
+            if (sortBy === 'fit') {{
+                // Unscored jobs go last
+                const fit = j => (j.fit_score === null || j.fit_score === undefined) ? -1 : j.fit_score;
+                filtered.sort((a, b) => fit(b) - fit(a));
+            }} else if (sortBy === 'company') {{
                 filtered.sort((a, b) => a.company.localeCompare(b.company));
             }} else if (sortBy === 'location') {{
                 filtered.sort((a, b) => a.location.localeCompare(b.location));

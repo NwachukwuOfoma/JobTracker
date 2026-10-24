@@ -16,8 +16,10 @@ from tracker.database import (
     init_db, get_tracked_jobs, insert_jobs,
     update_jobs_status_bulk, update_job_status, update_job_salary,
     update_jobs_salary_bulk, update_jobs_apply_url_bulk,
-    mark_jobs_duplicate, update_jobs_location_bulk, mark_ai_salary_checked
+    mark_jobs_duplicate, update_jobs_location_bulk, mark_ai_salary_checked,
+    update_jobs_fit_bulk
 )
+from tracker.fit_scorer import score_jobs
 from tracker.salary_estimator import estimate_salaries, reuse_known_salaries
 from tracker.ats_resolver import resolve_apply_urls
 from tracker.scraper import scrape_all_jobs, fetch_salary_from_url
@@ -213,6 +215,9 @@ def run_export() -> None:
             "age": job.get("age", ""),
             "url": job["original_url"],
             "apply_url": job.get("apply_url") or "",
+            "fit_score": job.get("fit_score"),
+            "fit_note": job.get("fit_note") or "",
+            "fit_flags": job.get("fit_flags") or "",
             "similar_status": interacted_map.get((job["company"].lower().strip(), job["title"].lower().strip()), "")
         }
         for job in tracked.values()
@@ -498,6 +503,25 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
             except Exception as e:
                 logger.warning(f"Direct apply link lookup failed: {e}")
 
+    # 7b1. Score how well each unvisited job fits your newest resume (once per job,
+    #      and again only when the resume changes). Runs alongside the salary
+    #      lookups below so it adds no time; skipped without a resume or API key.
+    def score_fit():
+        candidates = [
+            j for j in get_tracked_jobs().values()
+            if j["status"] == "new" and not j.get("duplicate_of")
+            and not is_below_salary_floor(j.get("salary") or "")
+        ]
+        try:
+            fits, resume_hash = score_jobs(candidates)
+            update_jobs_fit_bulk(fits, resume_hash)
+            if fits and print_output:
+                print(f"Scored resume fit for {len(fits)} job(s).")
+        except Exception as e:
+            logger.warning(f"Fit scoring failed: {e}")
+    fit_executor = ThreadPoolExecutor(max_workers=1)
+    fit_future = fit_executor.submit(score_fit)
+
     # 7b2. Jobs still without a salary: have Claude search the web for the posted
     #      range or an estimate (once per job; skipped when no API key is set up)
     unpriced = [
@@ -519,6 +543,9 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
                 print(f"Looked up salaries online for {len(estimates)} job(s); found {sum(1 for v in estimates.values() if v)}.")
             update_jobs_salary_bulk({u: s for u, s in estimates.items() if s})
             mark_ai_salary_checked(list(estimates))
+
+    fit_future.result()
+    fit_executor.shutdown()
 
     # 7c. Drop jobs you've already seen under another link and merge duplicate listings
     cleanup_duplicate_jobs(print_output=print_output)
@@ -591,6 +618,9 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
             "age": j.get("age") or "",
             "url": j.get("original_url") or j.get("url"),
             "apply_url": j.get("apply_url") or "",
+            "fit_score": j.get("fit_score"),
+            "fit_note": j.get("fit_note") or "",
+            "fit_flags": j.get("fit_flags") or "",
             "normalized_url": j["normalized_url"],
             "similar_status": interacted_map.get((j["company"].lower().strip(), j["title"].lower().strip()), "")
         }

@@ -22,6 +22,11 @@ REPO_1_URL = "https://raw.githubusercontent.com/speedyapply/2027-AI-College-Jobs
 REPO_2_URL = "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/README.md"
 REPO_3_URL = "https://raw.githubusercontent.com/speedyapply/2027-SWE-College-Jobs/main/NEW_GRAD_USA.md"
 
+# Your resume, used to score how well each job fits. The newest file whose name
+# starts with this (PDF or Word, anywhere Spotlight can see; cover letters ignored)
+# is used, so saving an updated copy under the same name is all it takes.
+RESUME_NAME = os.environ.get("JOBTRACKER_RESUME_NAME", "NwachukwuOfomaResume")
+
 # Chrome history default path on macOS
 CHROME_HISTORY_PATH = Path(os.path.expanduser("~/Library/Application Support/Google/Chrome/Default/History"))
 
