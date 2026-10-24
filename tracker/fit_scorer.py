@@ -38,7 +38,7 @@ REPORT_TOOL = {
             "flags": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "At most 3 hard requirements (stated as required, not preferred) the resume doesn't meet, 2-4 words each, e.g. 'Security clearance', 'US citizenship', '5+ years', 'PhD required'. Never skills, locations or nice-to-haves. Empty if none.",
+                "description": "At most 3 hard requirements (stated as required, not preferred) the resume doesn't meet, 2-4 words each, e.g. 'Security clearance', 'US citizenship', '5+ years', 'PhD required'. Never skills, locations, nice-to-haves, or anything the candidate's other facts say they meet (such as citizenship). Empty if none.",
             },
         },
         "required": ["score", "note", "flags"],
