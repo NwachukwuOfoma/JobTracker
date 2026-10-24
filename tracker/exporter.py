@@ -1226,7 +1226,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
         // Asks the JobTracker Chrome extension to line up open job tabs by fit,
         // best right after this tab. Only the extension can move tabs safely.
         // Jobs currently shown on the board (after tab, search and dismiss filters)
-        var shownJobs = [];  // var: renderDashboard may run before this line does
+        var shownJobs;  // var without a value: renderDashboard may already have set it
 
         function needsExtension(minVersion) {{
             const v = document.documentElement.dataset.jobtrackerExtension;
@@ -1240,7 +1240,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
         // "Apply Now" (one Undo brings them all back)
         function openRemainingJobs() {{
             if (needsExtension(1.2)) return;
-            const list = [...shownJobs].sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1));
+            const list = [...(shownJobs || [])].sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1));
             if (!list.length) {{ showToast('No jobs on the board to open.', 'info'); return; }}
             if (!confirm(`Open ${{list.length}} jobs in new tabs? They'll be lined up with your open job tabs by resume fit.`)) return;
 
