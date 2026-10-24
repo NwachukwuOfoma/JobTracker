@@ -714,8 +714,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             </div>
             <div class="filter-group">
                 <select id="sort-select" class="sort-select">
-                    <option value="none">Latest to Oldest (Default)</option>
-                    <option value="fit">Sort by Resume Fit (Best First)</option>
+                    <option value="fit" selected>Sort by Resume Fit (Default)</option>
+                    <option value="none">Latest to Oldest</option>
                     <option value="salary-desc">Sort by Salary (High to Low)</option>
                     <option value="salary-asc">Sort by Salary (Low to High)</option>
                     <option value="salary-undefined">Undefined Salary</option>
@@ -1275,7 +1275,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
         }}
 
         // Initial render
-        renderDashboard(jobs);
+        filterAndSortJobs();
         syncInteractionsWithServer();
     </script>
 </body>
