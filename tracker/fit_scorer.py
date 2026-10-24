@@ -34,9 +34,10 @@ DEALBREAKERS = {
     "publications_required": "Publications required",
     "five_plus_years_required": "5+ years required",
     "senior_level": "Senior-level role",
+    "internship": "Internship / co-op",
 }
 # Bump when the scoring instructions change in a way that should re-score every job
-SCORING_VERSION = "3"
+SCORING_VERSION = "4"
 
 # Backstops applied to the model's flags, since it sometimes flags a dealbreaker
 # ("Active TS/SCI clearance", "8+ years") without also listing it as one
@@ -152,6 +153,7 @@ Dealbreakers (only when the posting states them as hard requirements; "preferred
 - non_us_location: the job is based outside the United States, or remote only from outside the US.
 - publications_required: a publication record (e.g. first-author papers at top venues) is required.
 - five_plus_years_required: the minimum required experience is 5 or more years (e.g. "5+ years", "5-7 years", "8+ years"). Not for 4 years or less, and not when the years are only preferred.
+- internship: a short, fixed-term internship, co-op or apprenticeship (e.g. a summer or semester term), even if the title doesn't say so. Full-time rotational programs, fellowships, residencies and new-grad roles don't count.
 - senior_level: the role itself is senior (Senior, Sr., Staff, Principal, Lead, or a level clearly above entry/mid, such as an engineer "3"/"4" ladder rung described as senior). Mentions of working with senior colleagues don't count.
 
 Call report_fit once."""

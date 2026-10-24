@@ -27,7 +27,11 @@ RELEVANT_TITLE_RE = re.compile(
     r"research (engineer|scientist)|perception|reinforcement learning)\b",
     re.IGNORECASE,
 )
-INTERN_RE = re.compile(r"\bintern(ship)?\b", re.IGNORECASE)
+# Short fixed-term programs. Rotational programs, fellowships and residencies are full-time roles and stay.
+INTERN_RE = re.compile(r"\b(intern|interns|internships?|co[- ]?ops?|apprentices?|apprenticeships?)\b", re.IGNORECASE)
+
+def is_internship(title: str) -> bool:
+    return bool(INTERN_RE.search(title or ""))
 # AI-flavoured titles that aren't engineering/research roles
 NON_TECHNICAL_RE = re.compile(
     r"\b(sales|account (executive|manager)|marketing|recruit\w*|counsel|legal|policy|"

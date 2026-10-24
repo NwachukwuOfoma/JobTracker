@@ -24,7 +24,7 @@ from tracker.salary_estimator import estimate_salaries, reuse_known_salaries
 from tracker.ats_resolver import resolve_apply_urls
 from tracker.scraper import scrape_all_jobs, fetch_salary_from_url
 from tracker.linkedin_fetcher import fetch_linkedin_jobs
-from tracker.board_fetcher import fetch_board_jobs, mentions_non_us_place, REPOSITORY as BOARDS_REPOSITORY
+from tracker.board_fetcher import fetch_board_jobs, mentions_non_us_place, is_internship, REPOSITORY as BOARDS_REPOSITORY
 from tracker.exporter import generate_csv, generate_html
 
 logger = setup_logging()
@@ -304,6 +304,10 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
         if any(sk in title_lower for sk in senior_keywords):
             continue
 
+        # Exclude internships and co-ops (rotational and new-grad programs stay)
+        if is_internship(job.get("title", "")):
+            continue
+
         # Exclude roles that are clearly outside the US ("Applied AI Architect (Brazil)", "Remote")
         if mentions_non_us_place(job.get("title", ""), job.get("location", "")):
             continue
@@ -503,11 +507,11 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
             except Exception as e:
                 logger.warning(f"Direct apply link lookup failed: {e}")
 
-    # 7b0. Re-check saved jobs against the non-US filter, which catches listings
-    #      whose location was corrected after they were first stored
+    # 7b0. Re-check saved jobs against the non-US and internship filters, which catches
+    #      listings whose location was corrected (or a filter added) after they were stored
     foreign = [
         j["normalized_url"] for j in get_tracked_jobs().values()
-        if j["status"] == "new" and mentions_non_us_place(j["title"], j.get("location") or "")
+        if j["status"] == "new" and (mentions_non_us_place(j["title"], j.get("location") or "") or is_internship(j["title"]))
     ]
     update_jobs_status_bulk(foreign, "skipped")
 
