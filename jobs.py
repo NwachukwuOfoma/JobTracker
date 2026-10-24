@@ -18,7 +18,7 @@ from tracker.database import (
     update_jobs_salary_bulk, update_jobs_apply_url_bulk,
     mark_jobs_duplicate, update_jobs_location_bulk, mark_ai_salary_checked
 )
-from tracker.salary_estimator import estimate_salaries
+from tracker.salary_estimator import estimate_salaries, reuse_known_salaries
 from tracker.ats_resolver import resolve_apply_urls
 from tracker.scraper import scrape_all_jobs, fetch_salary_from_url
 from tracker.linkedin_fetcher import fetch_linkedin_jobs
@@ -505,6 +505,14 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
         if j["status"] == "new" and not (j.get("salary") or "").strip() and not j.get("ai_salary_checked")
     ]
     if unpriced:
+        # Free first: reuse a salary we already have for the same or a very similar
+        # role at the same company; only the rest go to the paid web search
+        reused = reuse_known_salaries(unpriced, get_tracked_jobs())
+        if reused:
+            if print_output:
+                print(f"Reused known salaries for {len(reused)} job(s) (same or similar role at the same company).")
+            update_jobs_salary_bulk(reused)
+            unpriced = [j for j in unpriced if j["normalized_url"] not in reused]
         estimates = estimate_salaries(unpriced)
         if estimates:
             if print_output:

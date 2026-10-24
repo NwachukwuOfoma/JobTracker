@@ -1,11 +1,14 @@
 import os
+import re
+from difflib import SequenceMatcher
+from datetime import datetime, timedelta
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from tracker.config import setup_logging
-from tracker.normalizer import HOURS_PER_YEAR
+from tracker.normalizer import HOURS_PER_YEAR, job_identity_key, parse_annual_salary
 
 logger = setup_logging()
 
@@ -150,3 +153,55 @@ def estimate_salaries(jobs: List[Dict]) -> Dict[str, str]:
     found = sum(1 for s in results.values() if s)
     logger.info(f"Salary estimates: {found} found, {len(results) - found} with no data, {len(jobs) - len(results)} failed.")
     return results
+
+
+# Reusing salaries we already have, before paying for a search
+REUSE_MAX_AGE_DAYS = 180
+SIMILAR_TITLE_RATIO = 0.8
+_LEVEL_RE = re.compile(
+    r"\b(i{1,3}|iv|[1-5]|junior|jr|associate|entry|new grad|graduate|early career|mid|senior|sr|staff|principal|lead)\b"
+)
+
+def _title_level(title: str) -> set:
+    return set(_LEVEL_RE.findall(title.lower()))
+
+def _salary_core(salary: str) -> str:
+    """'$140,000 - $170,000 (Est.)' -> '$140,000 - $170,000'."""
+    return salary.split(" (")[0].strip()
+
+def reuse_known_salaries(jobs: List[Dict], tracked_jobs: Dict[str, Dict]) -> Dict[str, str]:
+    """
+    Free alternative to a paid lookup: copies a salary from a job we already know
+    at the same company with the same title, or failing that a very similar title
+    at the same level ("Machine Learning Engineer" ~ "Machine Learning Engineer,
+    Growth"; "Data Scientist I" never borrows from "Data Scientist III").
+    Only salaries first seen in the last 6 months are used.
+    Returns {normalized_url: salary string} for the jobs that matched.
+    """
+    cutoff = (datetime.now() - timedelta(days=REUSE_MAX_AGE_DAYS)).isoformat()
+    by_company: Dict[str, List[Dict]] = {}
+    for job in tracked_jobs.values():
+        salary = (job.get("salary") or "").strip()
+        if salary and parse_annual_salary(salary) and (job.get("date_first_seen") or "") >= cutoff:
+            by_company.setdefault(job_identity_key(job["company"], "")[0], []).append(job)
+
+    reused: Dict[str, str] = {}
+    for job in jobs:
+        company_key, title_key = job_identity_key(job["company"], job["title"])
+        known = [k for k in by_company.get(company_key, []) if k["normalized_url"] != job["normalized_url"]]
+        if not known:
+            continue
+        same = next((k for k in known if job_identity_key(k["company"], k["title"])[1] == title_key), None)
+        if same:
+            core = _salary_core(same["salary"])
+            reused[job["normalized_url"]] = f"{core} (Est., same role)"
+            continue
+        level = _title_level(job["title"])
+        scored = [
+            (SequenceMatcher(None, job["title"].lower(), k["title"].lower()).ratio(), k)
+            for k in known if _title_level(k["title"]) == level
+        ]
+        ratio, best = max(scored, key=lambda x: x[0], default=(0, None))
+        if best and ratio >= SIMILAR_TITLE_RATIO:
+            reused[job["normalized_url"]] = f"{_salary_core(best['salary'])} (Est., similar role)"
+    return reused

@@ -16,6 +16,7 @@ from tracker.scraper import is_us_or_remote
 logger = setup_logging()
 
 REPOSITORY = "company-boards"
+WORKDAY_COUNTRY_CACHE = BOARD_CACHE_PATH.parent / "workday_countries.json"
 MAX_AGE_DAYS = 30  # same window as the LinkedIn search
 WATCHLIST_LOOKBACK_DAYS = 90  # companies seen in your feeds within this window are watched
 
@@ -49,7 +50,20 @@ NON_US_RE = re.compile(
     r"lithuania|latvia|estonia|czech|slovakia|hungary|bulgaria|peru|uruguay|ontario|quebec|montreal|"
     r"british columbia|alberta|calgary|ottawa|el salvador|san salvador|guatemala|honduras|"
     r"dominican republic|puerto rico, mx|melbourne|brisbane|adelaide|anz|singapore|glasgow|manchester|"
-    r"bristol, uk|belfast)\b",
+    r"bristol, uk|belfast|spain|madrid|barcelona|valencia, spain|rehovot|haifa|herzliya|jerusalem|"
+    r"petah tikva|yokneam|ra'anana|netanya|beer sheva|luxembourg|monaco|iceland|reykjavik|cyprus|malta|"
+    r"pakistan|karachi|lahore|bangladesh|dhaka|sri lanka|nepal|morocco|tunisia|ghana|accra|ethiopia|"
+    r"rwanda|uganda|tanzania|armenia|yerevan|georgia, tbilisi|tbilisi|kazakhstan|almaty|uzbekistan|"
+    r"belarus|minsk|moldova|kyiv|kiev|lviv|gdansk|wroclaw|poznan|brno|ljubljana|slovenia|zagreb|"
+    r"belgrade|athens|thessaloniki|porto, portugal|seville|bilbao|lyon|marseille|toulouse|nantes|"
+    r"grenoble|nice, france|hamburg|frankfurt|cologne|stuttgart|dusseldorf|dresden|leipzig|"
+    r"rotterdam|eindhoven|utrecht|the hague|antwerp|ghent|geneva|lausanne|basel|gothenburg|malmo|"
+    r"aarhus|espoo|tampere|bergen|cork|galway|limerick|leeds|birmingham, uk|cambridge, uk|oxford, uk|"
+    r"reading, uk|nanjing|hangzhou|chengdu|wuhan|suzhou|guangzhou|osaka|kyoto|busan|hsinchu|"
+    r"penang|cebu|ho chi minh|hanoi|da nang|auckland|wellington, nz|perth, wa, australia|"
+    r"monterrey|guadalajara|mexico city|sao paulo|são paulo|rio de janeiro|buenos aires|santiago, chile|"
+    r"lima, peru|medellin|medellín|quito|montevideo|vancouver, bc|toronto, on|waterloo, on|"
+    r"kitchener|edmonton|winnipeg|halifax)\b",
     re.IGNORECASE,
 )
 US_EXPLICIT_RE = re.compile(r"\b(us|usa|u\.s\.|united states|americas|north america)\b", re.IGNORECASE)
@@ -64,6 +78,13 @@ def _us_state_codes(text: str) -> set:
     neither does "IN", which next to a foreign city ("bangalore, IN") means India."""
     return {m.group(0).strip(", ").upper() for m in US_STATE_RE.finditer(text)} & US_STATE_CODES - {"IN"}
 
+# ISO-3166 alpha-3 codes Workday-style locations use ("Rehovot,ISR"); matched case-sensitively
+NON_US_COUNTRY_CODE_RE = re.compile(
+    r"\b(ISR|ESP|DEU|GBR|FRA|IND|CAN|CHN|JPN|KOR|SGP|AUS|BRA|MEX|POL|NLD|IRL|CHE|SWE|ITA|PRT|BEL|AUT|"
+    r"DNK|FIN|NOR|CZE|ROU|HUN|TUR|ARE|SAU|PHL|VNM|MYS|IDN|THA|TWN|HKG|ARG|COL|CHL|CRI|ZAF|EGY|NGA|"
+    r"KEN|UKR|SRB|HRV|BGR|GRC|LTU|LVA|EST|SVK|SVN|LUX|NZL|PER|URY|PAK|BGD)\b"
+)
+
 def mentions_non_us_place(title: str, location: str) -> bool:
     """
     True when a job's title or location names a place outside the US and nothing in
@@ -71,7 +92,7 @@ def mentions_non_us_place(title: str, location: str) -> bool:
     "Remote - US / Canada" or "London, UK; New York, NY" are kept.
     """
     text = f"{title or ''} | {location or ''}"
-    if not NON_US_RE.search(text):
+    if not (NON_US_RE.search(text) or NON_US_COUNTRY_CODE_RE.search(text)):
         return False
     return not (US_EXPLICIT_RE.search(text) or _us_state_codes(text))
 
@@ -156,12 +177,23 @@ def _ashby(token: str) -> List[Dict]:
     data = requests.get(
         f"https://api.ashbyhq.com/posting-api/job-board/{token}?includeCompensation=true", timeout=8
     ).json()
-    return [{
-        "title": j["title"], "url": j["jobUrl"],
-        "location": "Remote" if j.get("isRemote") else j.get("location", ""),
-        "posted": _parse_date(j.get("publishedAt")),
-        "salary": ((j.get("compensation") or {}).get("compensationTierSummary") or ""),
-    } for j in data.get("jobs", []) if j.get("isListed", True)]
+    postings = []
+    for j in data.get("jobs", []):
+        if not j.get("isListed", True):
+            continue
+        countries = {
+            ((loc.get("address") or {}).get("postalAddress") or {}).get("addressCountry") or ""
+            for loc in [j] + list(j.get("secondaryLocations") or [])
+        } - {""}
+        if countries and not any(_is_us_country(c) for c in countries):
+            continue  # Ashby gives each location's country; skip roles with no US location
+        postings.append({
+            "title": j["title"], "url": j["jobUrl"],
+            "location": "Remote" if j.get("isRemote") else j.get("location", ""),
+            "posted": _parse_date(j.get("publishedAt")),
+            "salary": ((j.get("compensation") or {}).get("compensationTierSummary") or ""),
+        })
+    return postings
 
 def _workday_posted(text: str) -> Optional[datetime]:
     """'Posted Today' / 'Posted Yesterday' / 'Posted 3 Days Ago'; None for 'Posted 30+ Days Ago'."""
@@ -176,6 +208,26 @@ def _workday_posted(text: str) -> Optional[datetime]:
         m = re.search(r"(\d+)", text)
         days = int(m.group(1)) if m else 0
     return datetime.now(timezone.utc) - timedelta(days=days)
+
+def _is_us_country(country: str) -> bool:
+    return (country or "").strip().lower() in {"united states", "united states of america", "us", "usa", "u.s.", "u.s.a."}
+
+def _workday_country(url: str) -> Optional[str]:
+    """
+    Workday search results show only a bare city ("Madrid"), but each posting's
+    detail record names its country. Returns e.g. "Spain", or None if unknown.
+    """
+    m = re.match(r"https://([^/]+)/(?:[a-z]{2}-[A-Z]{2}/)?([^/]+)(/job/.+)", url)
+    if not m:
+        return None
+    host, site, path = m.groups()
+    try:
+        info = requests.get(f"https://{host}/wday/cxs/{host.split('.')[0]}/{site}{path}", timeout=8).json().get("jobPostingInfo", {})
+    except Exception:
+        return None
+    if any(_us_state_codes(", " + str(loc)) or US_EXPLICIT_RE.search(str(loc)) for loc in info.get("additionalLocations") or []):
+        return "United States of America"  # primary office abroad, but also offered in the US
+    return (info.get("country") or {}).get("descriptor")
 
 def _workday(token: str) -> List[Dict]:
     # The same search endpoint Workday's public career pages call. Results are
@@ -293,7 +345,7 @@ def fetch_board_jobs(tracked_jobs: Dict[str, Dict], max_workers: int = 48) -> Li
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         results = list(executor.map(fetch, watchlist))
 
-    jobs = []
+    candidates = []
     for (board, company), postings in zip(watchlist.items(), results):
         for p in postings:
             title = p["title"]
@@ -305,18 +357,45 @@ def fetch_board_jobs(tracked_jobs: Dict[str, Dict], max_workers: int = 48) -> Li
             if not us_ok:
                 continue
             age = f"{(datetime.now(timezone.utc) - p['posted']).days}d" if p["posted"] else ""
-            jobs.append({
-                "normalized_url": normalize_url(p["url"]),
-                "url": p["url"],
-                "company": company,
-                "title": p["title"].strip(),
-                "location": p["location"] or "Unknown",
-                "repository": REPOSITORY,
-                "source": REPOSITORY,
-                "category": "All Roles",
-                "salary": p["salary"],
-                "age": age,
-                "status": "new",
-            })
+            p["company"], p["age"] = company, age
+            candidates.append(p)
+
+    # Workday postings get their country checked on the posting itself, once each:
+    # results (including rejected non-US postings) are cached between fetches.
+    try:
+        country_cache = json.loads(WORKDAY_COUNTRY_CACHE.read_text())
+    except Exception:
+        country_cache = {}
+    unverified = [
+        p for p in candidates
+        if p.get("location_unverified") and p["url"] not in country_cache and normalize_url(p["url"]) not in tracked_jobs
+    ]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        for p, country in zip(unverified, executor.map(lambda p: _workday_country(p["url"]), unverified)):
+            if country:
+                country_cache[p["url"]] = country
+    try:
+        WORKDAY_COUNTRY_CACHE.write_text(json.dumps(country_cache, indent=1, sort_keys=True))
+    except OSError as e:
+        logger.warning(f"Could not save Workday country cache: {e}")
+
+    jobs = []
+    for p in candidates:
+        country = country_cache.get(p["url"])
+        if country and not _is_us_country(country):
+            continue
+        jobs.append({
+            "normalized_url": normalize_url(p["url"]),
+            "url": p["url"],
+            "company": p["company"],
+            "title": p["title"].strip(),
+            "location": p["location"] or "Unknown",
+            "repository": REPOSITORY,
+            "source": REPOSITORY,
+            "category": "All Roles",
+            "salary": p["salary"],
+            "age": p["age"],
+            "status": "new",
+        })
     logger.info(f"Found {len(jobs)} relevant postings on company boards.")
     return jobs
