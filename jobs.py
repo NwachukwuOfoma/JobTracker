@@ -22,7 +22,7 @@ from tracker.salary_estimator import estimate_salaries
 from tracker.ats_resolver import resolve_apply_urls
 from tracker.scraper import scrape_all_jobs, fetch_salary_from_url
 from tracker.linkedin_fetcher import fetch_linkedin_jobs
-from tracker.board_fetcher import fetch_board_jobs, REPOSITORY as BOARDS_REPOSITORY
+from tracker.board_fetcher import fetch_board_jobs, mentions_non_us_place, REPOSITORY as BOARDS_REPOSITORY
 from tracker.exporter import generate_csv, generate_html
 
 logger = setup_logging()
@@ -297,6 +297,10 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
             
         # Exclude if Senior / Staff / Lead / Principal in title
         if any(sk in title_lower for sk in senior_keywords):
+            continue
+
+        # Exclude roles that are clearly outside the US ("Applied AI Architect (Brazil)", "Remote")
+        if mentions_non_us_place(job.get("title", ""), job.get("location", "")):
             continue
 
         # Salary floor check (hourly rates are annualized before comparing)

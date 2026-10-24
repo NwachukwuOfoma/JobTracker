@@ -48,19 +48,38 @@ NON_US_RE = re.compile(
     r"new zealand|auckland|scotland|edinburgh|wales|cambridge, uk|ukraine|romania|serbia|croatia|"
     r"lithuania|latvia|estonia|czech|slovakia|hungary|bulgaria|peru|uruguay|ontario|quebec|montreal|"
     r"british columbia|alberta|calgary|ottawa|el salvador|san salvador|guatemala|honduras|"
-    r"dominican republic|puerto rico, mx)\b",
+    r"dominican republic|puerto rico, mx|melbourne|brisbane|adelaide|anz|singapore|glasgow|manchester|"
+    r"bristol, uk|belfast)\b",
     re.IGNORECASE,
 )
 US_EXPLICIT_RE = re.compile(r"\b(us|usa|u\.s\.|united states|americas|north america)\b", re.IGNORECASE)
 US_STATE_RE = re.compile(r",\s*[A-Z]{2}\b")  # "New York, NY"
+US_STATE_CODES = set(
+    "AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ "
+    "NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC".split()
+)
+
+def _us_state_codes(text: str) -> set:
+    """US state codes after a comma ("Austin, TX"). "ON"/"BC" (Canada) don't count, and
+    neither does "IN", which next to a foreign city ("bangalore, IN") means India."""
+    return {m.group(0).strip(", ").upper() for m in US_STATE_RE.finditer(text)} & US_STATE_CODES - {"IN"}
+
+def mentions_non_us_place(title: str, location: str) -> bool:
+    """
+    True when a job's title or location names a place outside the US and nothing in
+    them points to the US, e.g. "Applied AI Architect (Brazil)" with location "Remote".
+    "Remote - US / Canada" or "London, UK; New York, NY" are kept.
+    """
+    text = f"{title or ''} | {location or ''}"
+    if not NON_US_RE.search(text):
+        return False
+    return not (US_EXPLICIT_RE.search(text) or _us_state_codes(text))
 
 def _is_us_location(location: str) -> bool:
     if NON_US_RE.search(location or ""):
-        # ", IN" next to a foreign city is India, not Indiana
-        us_states = {m.group(0).strip(", ").upper() for m in US_STATE_RE.finditer(location)} - {"IN"}
-        if not (US_EXPLICIT_RE.search(location) or us_states):
+        if not (US_EXPLICIT_RE.search(location) or _us_state_codes(location)):
             return False
-    return is_us_or_remote(location)
+    return bool(_us_state_codes(location)) or is_us_or_remote(location)
 
 # Workday locations are often bare city names, so also catch non-US roles by their titles:
 # German/French/Dutch/Spanish job terms and UK/EU programme names
