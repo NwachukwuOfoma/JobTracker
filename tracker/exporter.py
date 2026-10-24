@@ -821,7 +821,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             statsBadge.textContent = `${{tabFiltered.length}} New Jobs Available`;
 
             // Structured groupings mimicking target repositories
-            const groups = {{
+            let groups = {{
                 "linkedin": {{
                     title: "LinkedIn Opportunities",
                     categories: {{ "All Roles": [] }}
@@ -880,6 +880,21 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                     groups[job.repository].categories["Other"].push(job);
                 }}
             }});
+
+            // Company / location / salary sorts are global orderings, so show every job in
+            // one list instead of splitting it by the board it came from
+            const sortLabels = {{
+                'company': 'Company', 'location': 'Location',
+                'salary-desc': 'Salary (High to Low)', 'salary-asc': 'Salary (Low to High)',
+            }};
+            if (sortLabels[sortSelect.value]) {{
+                groups = {{
+                    "sorted": {{
+                        title: `All Jobs, Sorted by ${{sortLabels[sortSelect.value]}}`,
+                        categories: {{ "All Roles": tabFiltered }}
+                    }}
+                }};
+            }}
 
             // Render groups
             Object.keys(groups).forEach(groupKey => {{
@@ -943,7 +958,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
                     // Add to nav buttons list
                     let buttonLabel = dispNameShort;
-                    if (activeTab === 'all' || activeTab === 'github') {{
+                    if ((activeTab === 'all' || activeTab === 'github') && groupKey !== 'sorted') {{
                         const prefix = groupKey === "2027-AI-College-Jobs" ? "AI" : groupKey === "2027-SWE-College-Jobs" ? "SWE" : groupKey === "linkedin" ? "LinkedIn" : groupKey === "company-boards" ? "Boards" : "Simplify";
                         buttonLabel = prefix + " - " + dispNameShort;
                     }}
