@@ -503,6 +503,14 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
             except Exception as e:
                 logger.warning(f"Direct apply link lookup failed: {e}")
 
+    # 7b0. Re-check saved jobs against the non-US filter, which catches listings
+    #      whose location was corrected after they were first stored
+    foreign = [
+        j["normalized_url"] for j in get_tracked_jobs().values()
+        if j["status"] == "new" and mentions_non_us_place(j["title"], j.get("location") or "")
+    ]
+    update_jobs_status_bulk(foreign, "skipped")
+
     # 7b1. Score how well each unvisited job fits your newest resume (once per job,
     #      and again only when the resume changes). Runs alongside the salary
     #      lookups below so it adds no time; skipped without a resume or API key.
@@ -515,8 +523,12 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
         try:
             fits, resume_hash = score_jobs(candidates)
             update_jobs_fit_bulk(fits, resume_hash)
+            # Jobs with a strict dealbreaker (required PhD, active clearance, non-US
+            # location, required publications) are skipped so they never show up
+            ruled_out = [url for url, fit in fits.items() if fit.get("dealbreakers")]
+            update_jobs_status_bulk(ruled_out, "skipped")
             if fits and print_output:
-                print(f"Scored resume fit for {len(fits)} job(s).")
+                print(f"Scored resume fit for {len(fits)} job(s); hid {len(ruled_out)} with a dealbreaker.")
         except Exception as e:
             logger.warning(f"Fit scoring failed: {e}")
     fit_executor = ThreadPoolExecutor(max_workers=1)

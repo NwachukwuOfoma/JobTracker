@@ -26,6 +26,16 @@ LINKEDIN_FETCH_WORKERS = 2  # LinkedIn's guest endpoint rate-limits quickly
 NOTES_FILE = Path.home() / ".config" / "jobtracker" / "candidate_notes.txt"
 SEARCH_DIRS = [Path.home() / d for d in ("Downloads", "Documents", "Desktop")]
 
+# Strict requirements that hide a job entirely (it's marked skipped and never shown)
+DEALBREAKERS = {
+    "phd_required": "PhD required",
+    "active_clearance_required": "Active clearance required",
+    "non_us_location": "Outside the US",
+    "publications_required": "Publications required",
+}
+# Bump when the scoring instructions change in a way that should re-score every job
+SCORING_VERSION = "2"
+
 REPORT_TOOL = {
     "name": "report_fit",
     "description": "Report how well the candidate fits this job.",
@@ -35,13 +45,18 @@ REPORT_TOOL = {
         "properties": {
             "score": {"type": "integer", "description": "0-100 fit score."},
             "note": {"type": "string", "description": "One short sentence (under 20 words): the strongest match and the biggest gap."},
+            "dealbreakers": {
+                "type": "array",
+                "items": {"type": "string", "enum": list(DEALBREAKERS)},
+                "description": "Strict requirements that rule the candidate out; see the system prompt. Empty if none.",
+            },
             "flags": {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": "At most 3 hard requirements (stated as required, not preferred) the resume doesn't meet, 2-4 words each, e.g. 'Security clearance', 'US citizenship', '5+ years', 'PhD required'. Never skills, locations, nice-to-haves, or anything the candidate's other facts say they meet (such as citizenship). Empty if none.",
             },
         },
-        "required": ["score", "note", "flags"],
+        "required": ["score", "note", "dealbreakers", "flags"],
         "additionalProperties": False,
     },
 }
@@ -93,7 +108,7 @@ def load_resume() -> Tuple[Optional[str], Optional[str], Optional[Path]]:
     if notes:
         text += f"\n\nOther facts about the candidate (not on the resume):\n{notes}"
     # The hash covers the notes too, so editing them re-scores jobs like a new resume does
-    return text, hashlib.sha256(text.encode()).hexdigest()[:12], path
+    return text, hashlib.sha256((SCORING_VERSION + text).encode()).hexdigest()[:12], path
 
 def _system_prompt(resume: str) -> str:
     return f"""Today's date is {date.today().isoformat()}. You screen job postings for a new-grad candidate in the US, scoring how well each one fits their resume.
@@ -109,6 +124,12 @@ Score 0-100:
 - 0-39: poor match (different field, clearly senior, or hard requirements they lack).
 
 Weigh the role's actual work and required skills most. Treat "1-3 years" asks as soft: new grads with internships often get these roles, so dock only a few points. Required 4+ years, a required PhD, or a title clearly above entry level caps the score at 50. If the description is missing, score from the title and company and say so in the note.
+
+Dealbreakers (only when the posting states them as hard requirements; "preferred", "a plus", "ability to obtain" or "eligible for" never count):
+- phd_required: a PhD (or MD) is required, not just preferred.
+- active_clearance_required: the candidate must already hold an active security clearance at hire. Roles where a clearance can be obtained after hire don't count.
+- non_us_location: the job is based outside the United States, or remote only from outside the US.
+- publications_required: a publication record (e.g. first-author papers at top venues) is required.
 
 Call report_fit once."""
 
@@ -136,6 +157,7 @@ def _score_one(client, system: str, job: Dict, description: str) -> Optional[Dic
         if block.type == "tool_use":
             fit = dict(block.input)
             fit["score"] = max(0, min(100, int(fit["score"])))
+            fit["dealbreaker_labels"] = [f"Hidden: {DEALBREAKERS[d]}" for d in fit.get("dealbreakers", []) if d in DEALBREAKERS]
             return fit
     return None
 

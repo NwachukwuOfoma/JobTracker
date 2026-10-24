@@ -281,7 +281,7 @@ def update_jobs_fit_bulk(fits: Dict[str, Dict[str, Any]], resume_hash: str, db_p
     conn = sqlite3.connect(db_path)
     conn.executemany(
         "UPDATE jobs SET fit_score = ?, fit_note = ?, fit_flags = ?, fit_resume_hash = ? WHERE normalized_url = ?",
-        [(f["score"], f["note"], "; ".join(f["flags"]), resume_hash, url) for url, f in fits.items()],
+        [(f["score"], f["note"], "; ".join(f.get("dealbreaker_labels", []) + f["flags"]), resume_hash, url) for url, f in fits.items()],
     )
     conn.commit()
     conn.close()
