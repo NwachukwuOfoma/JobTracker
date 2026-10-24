@@ -685,6 +685,9 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                     </svg>
                     <span class="fetch-btn-text">Fetch Company Boards</span>
                 </button>
+                <button class="fetch-btn" id="arrange-tabs-btn" onclick="arrangeTabs()" title="Line up your open job tabs right after this one, best resume fit first">
+                    <span class="fetch-btn-text">🗂️ Arrange Job Tabs</span>
+                </button>
             </div>
         </header>
 
@@ -1211,6 +1214,24 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                 allBtns.forEach(b => b.disabled = false);
                 btnText.innerText = btn.dataset.label;
             }}
+        }}
+
+        // Asks the JobTracker Chrome extension to line up open job tabs by fit,
+        // best right after this tab. Only the extension can move tabs safely.
+        function arrangeTabs() {{
+            if (!document.documentElement.dataset.jobtrackerExtension) {{
+                showToast('⚠️ Needs the JobTracker extension (v1.1): open <code>chrome://extensions</code> and click reload on JobTracker, then refresh this page.', 'error', 8000);
+                return;
+            }}
+            const onDone = (event) => {{
+                if (event.source !== window || event.data?.type !== 'jobtracker-arrange-tabs-done') return;
+                window.removeEventListener('message', onDone);
+                const r = event.data.result;
+                if (r.error) showToast(`⚠️ Couldn't arrange tabs: ${{escapeHtml(r.error)}}`, 'error', 6000);
+                else showToast(r.moved ? `✅ Lined up ${{r.moved}} job tabs, best fit first` : 'No scored job tabs are open.', 'success');
+            }};
+            window.addEventListener('message', onDone);
+            window.postMessage({{ type: 'jobtracker-arrange-tabs' }}, '*');
         }}
 
         function showToast(message, type = 'info', duration = 4000) {{

@@ -120,6 +120,33 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
                 self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode("utf-8"))
             return
 
+        if parsed.path == "/api/tab_scores":
+            # The Chrome extension sends the URLs of every open tab; we answer with the
+            # resume-fit score of each one we know as a job, so it can line them up
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            urls = json.loads(body).get("urls", [])
+            by_url = {}
+            for job in get_tracked_jobs().values():
+                if job.get("fit_score") is None:
+                    continue
+                by_url[job["normalized_url"]] = job["fit_score"]
+                for link in (job.get("original_url"), job.get("apply_url")):
+                    if link:
+                        by_url.setdefault(normalize_url(link), job["fit_score"])
+            scores = {}
+            for url in urls:
+                if url.startswith("http") and "localhost" not in url and "127.0.0.1" not in url:
+                    score = by_url.get(normalize_url(url))
+                    if score is not None:
+                        scores[url] = score
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps({"scores": scores}).encode("utf-8"))
+            return
+
         if parsed.path == "/api/interact":
             content_len = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
