@@ -21,6 +21,9 @@ MODEL = "claude-haiku-5-5"
 MAX_WORKERS = 4
 FETCH_WORKERS = 12
 LINKEDIN_FETCH_WORKERS = 2  # LinkedIn's guest endpoint rate-limits quickly
+# Facts about you that aren't on the resume (e.g. "US citizen"), one per line.
+# Kept outside the repository because it's personal.
+NOTES_FILE = Path.home() / ".config" / "jobtracker" / "candidate_notes.txt"
 SEARCH_DIRS = [Path.home() / d for d in ("Downloads", "Documents", "Desktop")]
 
 REPORT_TOOL = {
@@ -83,6 +86,13 @@ def load_resume() -> Tuple[Optional[str], Optional[str], Optional[Path]]:
         return None, None, None
     if not text:
         return None, None, None
+    try:
+        notes = NOTES_FILE.read_text().strip()
+    except OSError:
+        notes = ""
+    if notes:
+        text += f"\n\nOther facts about the candidate (not on the resume):\n{notes}"
+    # The hash covers the notes too, so editing them re-scores jobs like a new resume does
     return text, hashlib.sha256(text.encode()).hexdigest()[:12], path
 
 def _system_prompt(resume: str) -> str:
