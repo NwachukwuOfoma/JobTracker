@@ -5,6 +5,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!sender.tab) return;
   let work;
   if (message?.type === 'open-and-arrange') work = openJobs(sender.tab, message.jobs || []);
+  else if (message?.type === 'tab-count') work = countTabs(sender.tab);
   else return;
   work.then(sendResponse, (e) => sendResponse({ error: String(e) }));
   return true; // respond asynchronously
@@ -67,3 +68,37 @@ async function openJobs(dashboard, jobs) {
   const { moved } = await arrangeTabs(dashboard);
   return { opened: toOpen.length, alreadyOpen: jobs.length - toOpen.length, moved };
 }
+
+// How many open tabs are jobs JobTracker knows (Chrome's tab strip stops showing
+// them once there are too many), and how many of those haven't loaded yet
+async function countTabs(dashboard) {
+  const tabs = (await chrome.tabs.query({})).filter((t) => t.id !== dashboard.id && tabUrl(t));
+  const { jobs } = await api(dashboard, '/api/tab_scores', { urls: tabs.map(tabUrl) });
+  const known = new Set(jobs);
+  const jobTabs = tabs.filter((t) => known.has(tabUrl(t)));
+  return {
+    jobTabs: jobTabs.length,
+    notLoaded: jobTabs.filter((t) => (t.pendingUrl || t.url || '').startsWith(LAZY_PAGE)).length,
+    totalTabs: tabs.length + 1,
+  };
+}
+
+// Keeps the count on every open dashboard current as tabs open, close or navigate
+let countTimer;
+function refreshCounts() {
+  clearTimeout(countTimer);
+  countTimer = setTimeout(async () => {
+    const dashboards = await chrome.tabs.query({ url: ['http://localhost:5050/*', 'http://127.0.0.1:5050/*'] });
+    for (const dashboard of dashboards) {
+      try {
+        const result = await countTabs(dashboard);
+        await chrome.tabs.sendMessage(dashboard.id, { type: 'tab-count-update', result });
+      } catch (e) {
+        // Dashboard still loading or the server is down; the next change retries
+      }
+    }
+  }, 500);
+}
+chrome.tabs.onCreated.addListener(refreshCounts);
+chrome.tabs.onRemoved.addListener(refreshCounts);
+chrome.tabs.onUpdated.addListener((id, change) => { if (change.url) refreshCounts(); });

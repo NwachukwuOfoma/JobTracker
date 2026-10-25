@@ -147,25 +147,27 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             content_len = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
             urls = json.loads(body).get("urls", [])
+            # (unscored jobs map to None: they still count as job tabs, but can't be ranked)
             by_url = {}
             for job in get_tracked_jobs().values():
-                if job.get("fit_score") is None:
-                    continue
-                by_url[job["normalized_url"]] = job["fit_score"]
+                by_url[job["normalized_url"]] = job.get("fit_score")
                 for link in (job.get("original_url"), job.get("apply_url")):
                     if link:
-                        by_url.setdefault(normalize_url(link), job["fit_score"])
+                        by_url.setdefault(normalize_url(link), job.get("fit_score"))
             scores = {}
+            jobs = []
             for url in urls:
                 if url.startswith("http") and "localhost" not in url and "127.0.0.1" not in url:
-                    score = by_url.get(normalize_url(url))
-                    if score is not None:
-                        scores[url] = score
+                    norm = normalize_url(url)
+                    if norm in by_url:
+                        jobs.append(url)
+                        if by_url[norm] is not None:
+                            scores[url] = by_url[norm]
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self._send_cors_headers()
             self.end_headers()
-            self.wfile.write(json.dumps({"scores": scores}).encode("utf-8"))
+            self.wfile.write(json.dumps({"scores": scores, "jobs": jobs}).encode("utf-8"))
             return
 
         if parsed.path == "/api/interact":

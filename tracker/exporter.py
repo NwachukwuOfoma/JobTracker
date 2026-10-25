@@ -100,6 +100,13 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             margin-top: 0.5rem;
         }}
 
+        .tab-count-badge {{
+            background: rgba(167, 139, 250, 0.15);
+            border-color: rgba(167, 139, 250, 0.35);
+            color: #c4b5fd;
+            margin-left: 0.5rem;
+        }}
+
         /* Undo panel styling */
         .undo-container {{
             display: flex;
@@ -659,6 +666,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             <h1>JobTracker Dashboard</h1>
             <div id="stats-container">
                 <span class="stats-badge" id="stats-badge">Loading...</span>
+                <span class="stats-badge tab-count-badge" id="tab-count-badge" hidden title="Job tabs open in Chrome (jobs JobTracker knows), kept current by the JobTracker extension"></span>
             </div>
             <div style="display: flex; justify-content: center; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;">
                 <button class="fetch-btn" id="fetch-btn-all" data-label="Fetch All Jobs" onclick="triggerFetch('all')">
@@ -1280,6 +1288,20 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                 }}))
             }}, '*');
         }}
+
+        // Live count of job tabs open in Chrome, pushed by the extension on every
+        // tab change (Chrome's tab strip stops showing them past a point)
+        function showTabCount(r) {{
+            const badge = document.getElementById('tab-count-badge');
+            if (!r || r.error) {{ badge.hidden = true; return; }}
+            const pending = r.notLoaded ? ` · ${{r.notLoaded}} not loaded yet` : '';
+            badge.textContent = `🗂️ ${{r.jobTabs}} job tab${{r.jobTabs === 1 ? '' : 's'}} open${{pending}} · ${{r.totalTabs}} tabs total`;
+            badge.hidden = false;
+        }}
+        window.addEventListener('message', (event) => {{
+            if (event.source === window && event.data?.type === 'jobtracker-tab-count-done') showTabCount(event.data.result);
+        }});
+        if (document.documentElement.dataset.jobtrackerExtension) window.postMessage({{ type: 'jobtracker-tab-count' }}, '*');
 
         function showToast(message, type = 'info', duration = 4000) {{
             let toast = document.getElementById('toast-notification');
