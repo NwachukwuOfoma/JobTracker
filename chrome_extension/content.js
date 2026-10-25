@@ -13,7 +13,18 @@
   if (!started || Date.now() - started > TIMEOUT_MS) return;
 
   const done = () => sessionStorage.removeItem(KEY);
-  const go = (url) => { done(); location.replace(url); };
+  // LinkedIn wraps outside links in a /safety/go/?url=... interstitial, which
+  // often fails to load when several jobs open at once; go to the real link.
+  const unwrap = (url) => {
+    try {
+      const u = new URL(url, location.href);
+      if (u.hostname.endsWith('linkedin.com') && u.pathname.startsWith('/safety/go') && u.searchParams.get('url')) {
+        return u.searchParams.get('url');
+      }
+    } catch (e) { /* not a URL; use as is */ }
+    return url;
+  };
+  const go = (url) => { done(); location.replace(unwrap(url)); };
 
   // LinkedIn opens the company site in a new tab; send it to this tab instead.
   const originalOpen = window.open;

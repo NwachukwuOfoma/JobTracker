@@ -73,10 +73,13 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             tracked = get_tracked_jobs()
             hidden = [j["original_url"] for j in tracked.values() if j.get("status") == "skipped"]
             applied = [j["original_url"] for j in tracked.values() if j.get("status") == "applied"]
+            # Jobs put back on the board (e.g. an undo done outside this browser)
+            restored = [j["original_url"] for j in tracked.values() if j.get("status") == "new"]
             self.wfile.write(json.dumps({
                 "status": "ok",
                 "hidden_urls": hidden,
-                "applied_locally": applied
+                "applied_locally": applied,
+                "new_urls": restored
             }).encode("utf-8"))
             return
 

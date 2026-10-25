@@ -685,11 +685,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                     </svg>
                     <span class="fetch-btn-text">Fetch Company Boards</span>
                 </button>
-                <button class="fetch-btn" id="arrange-tabs-btn" onclick="arrangeTabs()" title="Line up your open job tabs right after this one, best resume fit first">
-                    <span class="fetch-btn-text">🗂️ Arrange Job Tabs</span>
-                </button>
-                <button class="fetch-btn" id="open-jobs-btn" onclick="openRemainingJobs()" title="Open every job shown below in background tabs, slotted in with your open job tabs by resume fit">
-                    <span class="fetch-btn-text" id="open-jobs-text">📂 Open Jobs in Tabs</span>
+                <button class="fetch-btn" id="open-jobs-btn" onclick="openRemainingJobs()" title="Open every job shown below as tabs that load when you click them, then line up all job tabs right after this one, best resume fit first">
+                    <span class="fetch-btn-text" id="open-jobs-text">🗂️ Open &amp; Arrange Job Tabs</span>
                 </button>
             </div>
         </header>
@@ -720,7 +717,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             </div>
             <div class="filter-group">
                 <select id="sort-select" class="sort-select">
-                    <option value="fit" selected>Sort by Resume Fit (Default)</option>
+                    <option value="fit" selected>Most Relevant First (Default)</option>
+                    <option value="fit-asc">Least Relevant First</option>
                     <option value="none">Latest to Oldest</option>
                     <option value="salary-desc">Sort by Salary (High to Low)</option>
                     <option value="salary-asc">Sort by Salary (Low to High)</option>
@@ -862,7 +860,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
 
             statsBadge.textContent = `${{tabFiltered.length}} New Jobs Available`;
             shownJobs = tabFiltered;
-            document.getElementById('open-jobs-text').textContent = `📂 Open ${{tabFiltered.length}} Jobs in Tabs`;
+            document.getElementById('open-jobs-text').textContent = tabFiltered.length
+                ? `🗂️ Open ${{tabFiltered.length}} & Arrange Job Tabs` : '🗂️ Arrange Job Tabs';
 
             // Structured groupings mimicking target repositories
             let groups = {{
@@ -928,7 +927,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             // Company / location / salary sorts are global orderings, so show every job in
             // one list instead of splitting it by the board it came from
             const sortLabels = {{
-                'fit': 'Resume Fit', 'company': 'Company', 'location': 'Location',
+                'fit': 'Most Relevant', 'fit-asc': 'Least Relevant', 'company': 'Company', 'location': 'Location',
                 'salary-desc': 'Salary (High to Low)', 'salary-asc': 'Salary (Low to High)',
             }};
             if (sortLabels[sortSelect.value]) {{
@@ -1143,10 +1142,14 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             }}
 
             // 3. Sort
-            if (sortBy === 'fit') {{
-                // Unscored jobs go last
-                const fit = j => (j.fit_score === null || j.fit_score === undefined) ? -1 : j.fit_score;
-                filtered.sort((a, b) => fit(b) - fit(a));
+            if (sortBy === 'fit' || sortBy === 'fit-asc') {{
+                // Unscored jobs go last either way
+                const fit = j => (j.fit_score === null || j.fit_score === undefined) ? null : j.fit_score;
+                const dir = sortBy === 'fit' ? -1 : 1;
+                filtered.sort((a, b) => {{
+                    if (fit(a) === null || fit(b) === null) return (fit(a) === null) - (fit(b) === null);
+                    return dir * (fit(a) - fit(b));
+                }});
             }} else if (sortBy === 'company') {{
                 filtered.sort((a, b) => a.company.localeCompare(b.company));
             }} else if (sortBy === 'location') {{
@@ -1239,16 +1242,20 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
         // merged into your already-open job tabs; they then leave the board like
         // "Apply Now" (one Undo brings them all back)
         function openRemainingJobs() {{
-            if (needsExtension(1.2)) return;
+            if (needsExtension(1.3)) return;
             const list = [...(shownJobs || [])].sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1));
-            if (!list.length) {{ showToast('No jobs on the board to open.', 'info'); return; }}
-            if (!confirm(`Open ${{list.length}} jobs in new tabs? They'll be lined up with your open job tabs by resume fit.`)) return;
+            // With nothing left on the board this just lines up the job tabs already open
+            if (list.length && !confirm(`Open ${{list.length}} jobs in new tabs? Each loads when you switch to it, and all job tabs get lined up by resume fit.`)) return;
 
             const onDone = (event) => {{
-                if (event.source !== window || event.data?.type !== 'jobtracker-open-jobs-done') return;
+                if (event.source !== window || event.data?.type !== 'jobtracker-open-and-arrange-done') return;
                 window.removeEventListener('message', onDone);
                 const r = event.data.result;
                 if (r.error) {{ showToast(`⚠️ Couldn't open jobs: ${{escapeHtml(r.error)}}`, 'error', 6000); return; }}
+                if (!list.length) {{
+                    showToast(r.moved ? `✅ Lined up ${{r.moved}} job tabs, best fit first` : 'No scored job tabs are open.', 'success');
+                    return;
+                }}
                 const urls = list.map(j => j.url);
                 const s = getLocalStorageSet('applied_locally');
                 urls.forEach(u => s.add(u));
@@ -1266,22 +1273,12 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             }};
             window.addEventListener('message', onDone);
             window.postMessage({{
-                type: 'jobtracker-open-jobs',
-                jobs: list.map(j => ({{ url: applyHref(j), keys: [j.url, j.apply_url].filter(Boolean) }}))
+                type: 'jobtracker-open-and-arrange',
+                jobs: list.map(j => ({{
+                    url: applyHref(j), keys: [j.url, j.apply_url].filter(Boolean),
+                    title: `${{j.company}} — ${{j.title}}`, fit: j.fit_score
+                }}))
             }}, '*');
-        }}
-
-        function arrangeTabs() {{
-            if (needsExtension(1.1)) return;
-            const onDone = (event) => {{
-                if (event.source !== window || event.data?.type !== 'jobtracker-arrange-tabs-done') return;
-                window.removeEventListener('message', onDone);
-                const r = event.data.result;
-                if (r.error) showToast(`⚠️ Couldn't arrange tabs: ${{escapeHtml(r.error)}}`, 'error', 6000);
-                else showToast(r.moved ? `✅ Lined up ${{r.moved}} job tabs, best fit first` : 'No scored job tabs are open.', 'success');
-            }};
-            window.addEventListener('message', onDone);
-            window.postMessage({{ type: 'jobtracker-arrange-tabs' }}, '*');
         }}
 
         function showToast(message, type = 'info', duration = 4000) {{
@@ -1307,6 +1304,23 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                 : 'http://127.0.0.1:5050';
 
             try {{
+                // 0. The database decides: drop local marks for jobs it says are back on the
+                //    board (undone elsewhere), so they aren't pushed back as applied/hidden
+                const pre = await fetch(apiBase + '/api/interactions');
+                if (pre.ok) {{
+                    const state = await pre.json();
+                    const back = new Set(state.new_urls || []);
+                    if (back.size) {{
+                        for (const key of ['hidden_urls', 'applied_locally']) {{
+                            const s = getLocalStorageSet(key);
+                            const before = s.size;
+                            back.forEach(u => s.delete(u));
+                            if (s.size !== before) saveLocalStorageSet(key, s);
+                        }}
+                        filterAndSortJobs();
+                    }}
+                }}
+
                 // 1. Sync whatever we have in local storage to the database
                 const localHidden = Array.from(getLocalStorageSet('hidden_urls'));
                 const localApplied = Array.from(getLocalStorageSet('applied_locally'));

@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Loading job…</title>
+  <style>
+    body { margin: 0; height: 100vh; display: flex; align-items: center; justify-content: center;
+           font: 15px system-ui, sans-serif; background: #0f172a; color: #cbd5e1; }
+    .box { text-align: center; padding: 1.5rem; max-width: 36rem; }
+    .title { font-size: 1.2rem; color: #f8fafc; margin-bottom: .4rem; }
+    .fit { color: #a78bfa; font-weight: 600; }
+    .hint { margin-top: 1rem; font-size: .85rem; opacity: .7; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="title" id="title"></div>
+    <div class="fit" id="fit"></div>
+    <div class="hint">Opens when you switch to this tab.</div>
+  </div>
+  <script src="lazy.js"></script>
+</body>
+</html>

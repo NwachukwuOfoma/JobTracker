@@ -4,14 +4,20 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!sender.tab) return;
   let work;
-  if (message?.type === 'arrange-tabs') work = arrangeTabs(sender.tab);
-  else if (message?.type === 'open-jobs') work = openJobs(sender.tab, message.jobs || []);
+  if (message?.type === 'open-and-arrange') work = openJobs(sender.tab, message.jobs || []);
   else return;
   work.then(sendResponse, (e) => sendResponse({ error: String(e) }));
   return true; // respond asynchronously
 });
 
-const tabUrl = (t) => t.pendingUrl || t.url;
+const LAZY_PAGE = chrome.runtime.getURL('lazy.html');
+
+// The job a tab holds: placeholder tabs carry it in their ?url= parameter
+const tabUrl = (t) => {
+  const url = t.pendingUrl || t.url;
+  if (url && url.startsWith(LAZY_PAGE)) return new URL(url).searchParams.get('url');
+  return url;
+};
 
 async function api(dashboard, path, body) {
   const resp = await fetch(`${new URL(dashboard.url).origin}${path}`, {
@@ -44,8 +50,9 @@ async function arrangeTabs(dashboard) {
   return { moved: jobTabs.length };
 }
 
-// Opens the dashboard's remaining jobs in background tabs (skipping any job
-// already open under any of its links), then slots everything in by fit.
+// Opens the dashboard's remaining jobs (skipping any job already open under any
+// of its links) as placeholder tabs that load the real page when you switch to
+// them, then slots every job tab in by fit. With no jobs it just arranges.
 async function openJobs(dashboard, jobs) {
   const tabs = await chrome.tabs.query({});
   const jobKeys = jobs.flatMap((j) => j.keys);
@@ -54,7 +61,8 @@ async function openJobs(dashboard, jobs) {
 
   const toOpen = jobs.filter((j) => !j.keys.some((k) => open.has(normalized[k])));
   for (const job of toOpen) {
-    await chrome.tabs.create({ windowId: dashboard.windowId, url: job.url, active: false });
+    const lazy = `${LAZY_PAGE}?${new URLSearchParams({ url: job.url, title: job.title || '', fit: job.fit ?? '' })}`;
+    await chrome.tabs.create({ windowId: dashboard.windowId, url: lazy, active: false });
   }
   const { moved } = await arrangeTabs(dashboard);
   return { opened: toOpen.length, alreadyOpen: jobs.length - toOpen.length, moved };

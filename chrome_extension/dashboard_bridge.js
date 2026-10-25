@@ -1,8 +1,7 @@
-// Runs on the JobTracker dashboard only. Passes the dashboard's tab requests
-// ("Arrange Job Tabs", "Open Jobs in Tabs") to the extension and hands back the result.
+// Runs on the JobTracker dashboard only. Passes the dashboard's "Open & Arrange
+// Job Tabs" request to the extension and hands back the result.
 const REQUESTS = {
-  'jobtracker-arrange-tabs': 'arrange-tabs',
-  'jobtracker-open-jobs': 'open-jobs',
+  'jobtracker-open-and-arrange': 'open-and-arrange',
 };
 window.addEventListener('message', (event) => {
   const type = REQUESTS[event.data?.type];
@@ -12,4 +11,4 @@ window.addEventListener('message', (event) => {
   });
 });
 // Lets the page know the extension is installed, and which version
-document.documentElement.dataset.jobtrackerExtension = '1.2';
+document.documentElement.dataset.jobtrackerExtension = '1.3';
