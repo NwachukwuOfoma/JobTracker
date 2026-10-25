@@ -717,8 +717,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             </div>
             <div class="filter-group">
                 <select id="sort-select" class="sort-select">
-                    <option value="fit" selected>Most Relevant First (Default)</option>
-                    <option value="fit-asc">Least Relevant First</option>
+                    <option value="fit-asc" selected>Least Relevant First (Default)</option>
+                    <option value="fit">Most Relevant First</option>
                     <option value="none">Latest to Oldest</option>
                     <option value="salary-desc">Sort by Salary (High to Low)</option>
                     <option value="salary-asc">Sort by Salary (Low to High)</option>
