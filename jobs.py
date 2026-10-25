@@ -110,9 +110,10 @@ def run_status_management(target_status: str) -> None:
         print("\nAction cancelled.")
 
 def is_below_salary_floor(salary: str, floor: int = 110000) -> bool:
-    """True when a salary is known and its low end (annualized) is under the floor."""
+    """True when a salary is known and even its top end (annualized) is under the floor.
+    Ranges are wide and new grads can land anywhere in them, so "$102k - $202k" passes."""
     parsed = parse_annual_salary(salary)
-    return parsed is not None and parsed[0] < floor
+    return parsed is not None and parsed[1] < floor
 
 def cleanup_duplicate_jobs(print_output: bool = True) -> Dict[str, int]:
     """
