@@ -1295,7 +1295,7 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             const badge = document.getElementById('tab-count-badge');
             if (!r || r.error) {{ badge.hidden = true; return; }}
             const pending = r.notLoaded ? ` · ${{r.notLoaded}} not loaded yet` : '';
-            badge.textContent = `🗂️ ${{r.jobTabs}} job tab${{r.jobTabs === 1 ? '' : 's'}} open${{pending}} · ${{r.totalTabs}} tabs total`;
+            badge.textContent = `🗂️ ${{r.jobTabs}} job tab${{r.jobTabs === 1 ? '' : 's'}} open${{pending}}`;
             badge.hidden = false;
         }}
         window.addEventListener('message', (event) => {{

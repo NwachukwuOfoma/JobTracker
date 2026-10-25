@@ -79,7 +79,6 @@ async function countTabs(dashboard) {
   return {
     jobTabs: jobTabs.length,
     notLoaded: jobTabs.filter((t) => (t.pendingUrl || t.url || '').startsWith(LAZY_PAGE)).length,
-    totalTabs: tabs.length + 1,
   };
 }
 
