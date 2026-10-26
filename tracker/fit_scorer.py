@@ -4,7 +4,7 @@ import subprocess
 import threading
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -21,6 +21,7 @@ MODEL = "claude-haiku-5-5"
 MAX_WORKERS = 4
 FETCH_WORKERS = 12
 LINKEDIN_FETCH_WORKERS = 2  # LinkedIn's guest endpoint rate-limits quickly
+DESCRIPTION_RETRY_DAYS = 3  # how long to keep re-trying jobs whose description didn't load
 # Facts about you that aren't on the resume (e.g. "US citizen"), one per line.
 # Kept outside the repository because it's personal.
 NOTES_FILE = Path.home() / ".config" / "jobtracker" / "candidate_notes.txt"
@@ -227,7 +228,14 @@ def score_jobs(jobs: List[Dict]) -> Tuple[Dict[str, Dict], Optional[str]]:
     import anthropic
 
     client = anthropic.Anthropic(api_key=key, max_retries=5)
-    jobs = [j for j in jobs if j.get("fit_resume_hash") != resume_hash]
+    # Jobs already scored without a description (the page didn't load then) get re-scored
+    # once it loads, for a few days after they're first seen
+    recent = (datetime.now() - timedelta(days=DESCRIPTION_RETRY_DAYS)).isoformat()
+    retry = [j for j in jobs if j.get("fit_resume_hash") == resume_hash and (j.get("date_first_seen") or "") >= recent]
+    saved = get_job_descriptions([j["normalized_url"] for j in retry])
+    retry = [j for j in retry if j["normalized_url"] not in saved]
+    found = _descriptions(retry) if retry else {}
+    jobs = [j for j in jobs if j.get("fit_resume_hash") != resume_hash] + [j for j in retry if j["normalized_url"] in found]
     if not jobs:
         return {}, resume_hash
     logger.info(f"Scoring fit for {len(jobs)} job(s) against {path.name}...")

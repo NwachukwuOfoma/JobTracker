@@ -110,10 +110,20 @@ def _generic(url: str) -> Optional[str]:
         tag.decompose()
     return _text(str(soup.body or soup))
 
-def fetch_description(url: str) -> str:
+def fetch_description(url: str, attempts: int = 2) -> str:
     """Returns the posting's description as plain text ("" if it couldn't be read)."""
     if not url:
         return ""
+    for attempt in range(attempts):  # one retry, since boards like Workday time out now and then
+        text = _fetch_once(url)
+        if text is not None:
+            return text[:MAX_CHARS]
+        if attempt + 1 < attempts:
+            time.sleep(2)
+    return ""
+
+def _fetch_once(url: str) -> Optional[str]:
+    """The description text, "" if the page has none, or None if the request failed."""
     try:
         if "greenhouse.io" in url:
             text = _greenhouse(url)
@@ -133,5 +143,5 @@ def fetch_description(url: str) -> str:
             text = _generic(url) if "linkedin.com" not in url else ""
     except Exception as e:
         logger.debug(f"Description fetch failed for {url}: {e}")
-        return ""
-    return (text or "")[:MAX_CHARS]
+        return None
+    return text or ""
