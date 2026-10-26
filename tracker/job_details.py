@@ -54,9 +54,18 @@ def _ashby(url: str) -> Optional[str]:
         return None
     org, job_id = m.groups()
     if org not in _ashby_boards:
-        data = requests.get(f"https://api.ashbyhq.com/posting-api/job-board/{org}", timeout=10).json()
-        _ashby_boards[org] = {j["id"]: j.get("descriptionPlain", "") for j in data.get("jobs", [])}
-    return _ashby_boards[org].get(job_id)
+        resp = requests.get(f"https://api.ashbyhq.com/posting-api/job-board/{org}", timeout=10)
+        jobs = resp.json().get("jobs", []) if resp.status_code == 200 else []
+        _ashby_boards[org] = {j["id"]: j.get("descriptionPlain", "") for j in jobs}
+    if job_id in _ashby_boards[org]:
+        return _ashby_boards[org][job_id]
+    # Some companies turn the board API off; the endpoint their job page uses still works
+    query = "query P($org: String!, $id: String!) { jobPosting(organizationHostedJobsPageName: $org, jobPostingId: $id) { descriptionHtml } }"
+    data = requests.post(
+        "https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobPosting",
+        json={"query": query, "variables": {"org": org, "id": job_id}}, timeout=8,
+    ).json()
+    return _text(((data.get("data") or {}).get("jobPosting") or {}).get("descriptionHtml", ""))
 
 def _smartrecruiters(url: str) -> Optional[str]:
     m = re.search(r"smartrecruiters\.com/([^/]+)/(\d+)", url)
@@ -74,6 +83,36 @@ def _workday(url: str) -> Optional[str]:
     host, site, path = m.groups()
     info = requests.get(f"https://{host}/wday/cxs/{host.split('.')[0]}/{site}{path}", timeout=8).json().get("jobPostingInfo", {})
     return _text(info.get("jobDescription", ""))
+
+def _oracle(url: str) -> Optional[str]:
+    m = re.search(r"https://([^/]+\.oraclecloud\.com)/hcmUI/CandidateExperience/[^/]+/sites/([^/]+)/(?:job|requisitions/preview)/(\d+)", url)
+    if not m:
+        return None
+    host, site, job_id = m.groups()
+    data = requests.get(
+        f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails",
+        params={"expand": "all", "onlyData": "true", "finder": f'ById;Id="{job_id}",siteNumber={site}'}, timeout=8,
+    ).json()
+    job = (data.get("items") or [{}])[0]
+    keys = ("ExternalDescriptionStr", "ExternalResponsibilitiesStr", "ExternalQualificationsStr")
+    return "\n".join(_text(job.get(k) or "") for k in keys).strip()
+
+def _workable(url: str) -> Optional[str]:
+    """One request per job. Workable rate-limits its APIs hard, so no retries or page fallback."""
+    m = re.search(r"apply\.workable\.com/([^/]+)/j/([0-9A-Za-z]+)", url)
+    if not m:
+        return None
+    resp = requests.get(f"https://apply.workable.com/api/v2/accounts/{m.group(1)}/jobs/{m.group(2)}", timeout=8)
+    if resp.status_code != 200:
+        return ""
+    data = resp.json()
+    return "\n".join(_text(data.get(k) or "") for k in ("description", "requirements", "benefits")).strip()
+
+def _icims(url: str) -> Optional[str]:
+    # The normal page only frames the posting; in_iframe=1 returns the posting itself
+    if not re.search(r"icims\.com/jobs/\d+", url):
+        return None
+    return _generic(url.split("#")[0] + ("&" if "?" in url else "?") + "in_iframe=1")
 
 def _linkedin(url: str) -> Optional[str]:
     m = re.search(r"linkedin\.com/jobs/view/(?:[^/?#]*-)?(\d+)", url)
@@ -114,6 +153,8 @@ def fetch_description(url: str, attempts: int = 2) -> str:
     """Returns the posting's description as plain text ("" if it couldn't be read)."""
     if not url:
         return ""
+    if "workable.com" in url:
+        attempts = 1
     for attempt in range(attempts):  # one retry, since boards like Workday time out now and then
         text = _fetch_once(url)
         if text is not None:
@@ -135,12 +176,18 @@ def _fetch_once(url: str) -> Optional[str]:
             text = _smartrecruiters(url)
         elif "myworkdayjobs.com" in url:
             text = _workday(url)
+        elif "oraclecloud.com" in url:
+            text = _oracle(url)
+        elif "apply.workable.com" in url:
+            text = _workable(url)
+        elif "icims.com" in url:
+            text = _icims(url)
         elif "linkedin.com/jobs" in url:
             text = _linkedin(url)
         else:
             text = None
         if not text:
-            text = _generic(url) if "linkedin.com" not in url else ""
+            text = _generic(url) if "linkedin.com" not in url and "workable.com" not in url else ""
     except Exception as e:
         logger.debug(f"Description fetch failed for {url}: {e}")
         return None

@@ -21,6 +21,7 @@ MODEL = "claude-haiku-5-5"
 MAX_WORKERS = 4
 FETCH_WORKERS = 12
 LINKEDIN_FETCH_WORKERS = 2  # LinkedIn's guest endpoint rate-limits quickly
+MIN_DESCRIPTION_CHARS = 300  # shorter text is page chrome ("Open Positions"), not a posting
 DESCRIPTION_RETRY_DAYS = 3  # how long to keep re-trying jobs whose description didn't load
 # Facts about you that aren't on the resume (e.g. "US citizen"), one per line.
 # Kept outside the repository because it's personal.
@@ -190,7 +191,7 @@ def _score_one(client, system: str, job: Dict, description: str) -> Optional[Dic
 
 def _descriptions(jobs: List[Dict]) -> Dict[str, str]:
     """Saved descriptions, plus freshly fetched ones for jobs that don't have one yet."""
-    have = get_job_descriptions([j["normalized_url"] for j in jobs])
+    have = {u: t for u, t in get_job_descriptions([j["normalized_url"] for j in jobs]).items() if len(t) >= MIN_DESCRIPTION_CHARS}
     missing = [j for j in jobs if j["normalized_url"] not in have]
     linkedin_slots = threading.Semaphore(LINKEDIN_FETCH_WORKERS)
 
@@ -204,7 +205,7 @@ def _descriptions(jobs: List[Dict]) -> Dict[str, str]:
                     text = fetch_description(url)
             else:
                 text = fetch_description(url)
-            if len(text) >= 300:
+            if len(text) >= MIN_DESCRIPTION_CHARS:
                 break
         return job["normalized_url"], text
 
@@ -233,9 +234,9 @@ def score_jobs(jobs: List[Dict]) -> Tuple[Dict[str, Dict], Optional[str]]:
     recent = (datetime.now() - timedelta(days=DESCRIPTION_RETRY_DAYS)).isoformat()
     retry = [j for j in jobs if j.get("fit_resume_hash") == resume_hash and (j.get("date_first_seen") or "") >= recent]
     saved = get_job_descriptions([j["normalized_url"] for j in retry])
-    retry = [j for j in retry if j["normalized_url"] not in saved]
+    retry = [j for j in retry if len(saved.get(j["normalized_url"], "")) < MIN_DESCRIPTION_CHARS]
     found = _descriptions(retry) if retry else {}
-    jobs = [j for j in jobs if j.get("fit_resume_hash") != resume_hash] + [j for j in retry if j["normalized_url"] in found]
+    jobs = [j for j in jobs if j.get("fit_resume_hash") != resume_hash] + [j for j in retry if len(found.get(j["normalized_url"], "")) >= MIN_DESCRIPTION_CHARS]
     if not jobs:
         return {}, resume_hash
     logger.info(f"Scoring fit for {len(jobs)} job(s) against {path.name}...")
