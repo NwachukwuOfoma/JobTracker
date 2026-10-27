@@ -15,7 +15,7 @@ sys.path.insert(0, str(BASE_DIR))
 from jobs import run_fetch_pipeline
 from tracker.database import get_tracked_jobs, update_jobs_status_bulk, update_job_status
 from tracker.normalizer import normalize_url
-from tracker.answer_drafter import draft_answers, save_answer
+from tracker.answer_drafter import draft_answers, fill_choices, save_answer
 
 PORT = 5050
 HOST = "127.0.0.1"
@@ -181,6 +181,23 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
                 result = draft_answers(
                     data.get("urls", []), data.get("title", ""), data.get("page_text", ""), data.get("questions", [])
                 )
+            except Exception as e:
+                result = {"error": str(e)}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
+            return
+
+        if parsed.path == "/api/fill_choices":
+            # The answer panel's "Fill rest": the form's remaining dropdowns, yes/no
+            # questions, checkboxes and short fields, answered from the standard-answers profile
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            try:
+                data = json.loads(body)
+                result = fill_choices(data.get("urls", []), data.get("title", ""), data.get("pageText", ""), data.get("questions", []))
             except Exception as e:
                 result = {"error": str(e)}
             self.send_response(200)

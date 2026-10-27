@@ -64,6 +64,130 @@
       field.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    // ---- Fill rest: the form's other blanks (dropdowns, yes/no buttons, checkboxes,
+    // short text), answered from your standard-answers profile on the server
+
+    // React dropdowns are read and set by page_select.js in the page's own world;
+    // the event round trip is synchronous, so the result is ready on return
+    let nextId = 0;
+    function pageSelect(action, el, value) {
+      if (!el.dataset.jtId) el.dataset.jtId = `jt${nextId++}`;
+      const id = el.dataset.jtId;
+      let result = null;
+      const listener = (e) => { const d = JSON.parse(e.detail); if (d.id === id) result = d.result; };
+      document.addEventListener('jobtracker-select-result', listener);
+      document.dispatchEvent(new CustomEvent('jobtracker-select', { detail: JSON.stringify({ action, id, value }) }));
+      document.removeEventListener('jobtracker-select-result', listener);
+      return result;
+    }
+
+    // Custom-styled radios and checkboxes often hide the input and show its label
+    const shown = (el) => !!el && (!!el.getClientRects().length ||
+      !!(el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.getClientRects().length) ||
+      !!el.closest('label')?.getClientRects().length);
+
+    function optionText(input) {
+      const label = (input.id && document.querySelector(`label[for="${CSS.escape(input.id)}"]`)) || input.closest('label');
+      return clean(label?.innerText || input.getAttribute('aria-label') || input.value);
+    }
+
+    // The question above a group of options: its legend, its ARIA label, or the text
+    // of the nearest container holding the whole group, minus the options' own labels
+    function groupLabel(inputs) {
+      const legend = inputs[0].closest('fieldset')?.querySelector('legend');
+      if (legend && clean(legend.innerText)) return clean(legend.innerText);
+      const group = inputs[0].closest('[role="radiogroup"], [role="group"]');
+      const labelledBy = group?.getAttribute('aria-labelledby');
+      if (labelledBy) {
+        const text = clean(labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' '));
+        if (text) return text;
+      }
+      if (clean(group?.getAttribute('aria-label'))) return clean(group.getAttribute('aria-label'));
+      const optionTexts = inputs.map(optionText).filter(Boolean);
+      let node = inputs[0].parentElement;
+      for (let depth = 0; node && depth < 8; depth++, node = node.parentElement) {
+        if (!inputs.every((i) => node.contains(i))) continue;
+        let text = node.innerText || '';
+        for (const option of optionTexts) text = text.replace(option, ' ');
+        if (clean(text).length >= 3) return clean(text).slice(0, 300);
+      }
+      return '';
+    }
+
+    function findBlanks() {
+      const written = new Set(findQuestions().map((q) => q.field));
+      const blanks = [];
+
+      for (const select of document.querySelectorAll('select')) {
+        if (select.disabled || !shown(select)) continue;
+        const options = [...select.options].filter((o) => o.value !== '' && !/^\s*(select|choose|--|please)/i.test(o.text));
+        if (!options.length || options.includes(select.selectedOptions[0])) continue;
+        blanks.push({
+          kind: 'choice', label: labelFor(select), options: options.map((o) => clean(o.text)), target: select,
+          apply: (value) => {
+            const option = options.find((o) => clean(o.text) === value);
+            if (!option) return false;
+            Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, option.value);
+            select.dispatchEvent(new Event('input', { bubbles: true }));
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          },
+        });
+      }
+
+      const groups = new Map();
+      for (const input of document.querySelectorAll('input[type="radio"], input[type="checkbox"]')) {
+        if (input.disabled || !shown(input)) continue;
+        const key = input.name ? `${input.type}:${input.name}` : (input.closest('fieldset, [role="radiogroup"], [role="group"]') || input);
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(input);
+      }
+      for (const inputs of groups.values()) {
+        if (inputs.some((i) => i.checked)) continue;
+        const target = inputs[0].closest('fieldset, [role="radiogroup"], [role="group"]') || inputs[0].parentElement;
+        if (inputs.length === 1 && inputs[0].type === 'checkbox') {
+          const box = inputs[0];
+          blanks.push({
+            kind: 'checkbox', label: clean(`${groupLabel(inputs)} ${optionText(box)}`), options: ['checked', 'unchecked'], target,
+            apply: (value) => { if (value === 'checked' && !box.checked) box.click(); return true; },
+          });
+        } else {
+          blanks.push({
+            kind: 'choice', label: groupLabel(inputs), options: inputs.map(optionText), target,
+            apply: (value) => {
+              const input = inputs.find((i) => optionText(i) === value);
+              if (!input) return false;
+              input.click();
+              return true;
+            },
+          });
+        }
+      }
+
+      for (const input of document.querySelectorAll('input[role="combobox"]')) {
+        if (!shown(input)) continue;
+        const state = pageSelect('state', input);
+        if (!state || !state.empty || !state.options.length) continue;
+        blanks.push({
+          kind: 'choice', label: labelFor(input), options: state.options, target: input.closest('[class*="control"]') || input,
+          apply: (value) => !!pageSelect('choose', input, value),
+        });
+      }
+
+      const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input:not([type])';
+      for (const field of document.querySelectorAll(textFields)) {
+        if (written.has(field) || field.value || field.disabled || field.readOnly || !shown(field)) continue;
+        if (field.getAttribute('role') === 'combobox' || field.hasAttribute('aria-autocomplete') || field.getAttribute('aria-hidden') === 'true') continue;
+        const label = labelFor(field);
+        if (label.length < 3) continue;
+        blanks.push({ kind: 'text', label, options: [], target: field, apply: (value) => { fill(field, value); return true; } });
+      }
+      return blanks.filter((b) => b.label);
+    }
+
+    // An application form (it takes a resume) still counts as worth a panel with no written questions
+    const isApplication = () => !!document.querySelector('input[type="file"]');
+
     let host = null;
     let items = [];
 
@@ -235,6 +359,49 @@
       root.querySelector('.fill-all').disabled = !shown;
     }
 
+    function fillRest() {
+      for (const el of document.querySelectorAll('[data-jt-left]')) {
+        el.style.outline = '';
+        el.removeAttribute('data-jt-left');
+      }
+      const blanks = findBlanks();
+      if (!blanks.length) {
+        setStatus('Nothing else to fill on this page.');
+        return;
+      }
+      const buttons = host.shadowRoot.querySelectorAll('button');
+      buttons.forEach((b) => { b.disabled = true; });
+      setStatus(`Filling ${blanks.length} field${blanks.length === 1 ? '' : 's'}…`);
+      chrome.runtime.sendMessage({
+        type: 'fill-choices',
+        frameUrl: location.href,
+        title: document.title,
+        pageText: (document.body?.innerText || '').slice(0, 8000),
+        questions: blanks.map(({ kind, label, options }) => ({ kind, label, options })),
+      }, (result) => {
+        buttons.forEach((b) => { b.disabled = false; });
+        updateSummary();
+        if (!result || result.error) {
+          setStatus(result?.error || 'No response. Is the JobTracker server running?', true);
+          return;
+        }
+        const left = [];
+        let filled = 0;
+        blanks.forEach((blank, i) => {
+          const value = result.answers[i];
+          if (value && blank.apply(value)) filled++;
+          else left.push(blank);
+        });
+        for (const blank of left) {
+          blank.target.style.outline = '2px solid #f0883e';
+          blank.target.style.outlineOffset = '2px';
+          blank.target.setAttribute('data-jt-left', '');
+        }
+        setStatus(`Filled ${filled} field${filled === 1 ? '' : 's'}.` +
+          (left.length ? ` ${left.length} left for you, outlined in orange.` : ' Check the form, then draft the written answers.'));
+      });
+    }
+
     function draft(targets) {
       const buttons = host.shadowRoot.querySelectorAll('button');
       buttons.forEach((b) => { b.disabled = true; });
@@ -286,6 +453,7 @@
             <button class="pause" title="Stop opening this panel by itself on job pages (click the toolbar icon to turn it back on)">Pause</button>
             <button class="close" aria-label="Close" title="Hide on this page">✕</button></header>
           <div class="actions">
+            <button class="fill-rest" title="Fill the rest of the form (dropdowns, yes/no questions, checkboxes, short fields) from your standard answers">Fill rest</button>
             <button class="primary all">Draft all</button>
             <button class="fill-all" title="Put every drafted answer into its form field">Fill all</button>
             <button class="rescan" title="Look for questions again (e.g. after moving to the next page of the form)">Rescan</button>
@@ -296,7 +464,7 @@
         </div>`;
       const list = root.querySelector('.list');
       if (!items.length) {
-        list.innerHTML = '<div class="empty">No open-ended questions found here. If the form has more pages, go to the next one and press Rescan.</div>';
+        list.innerHTML = '<div class="empty">No written questions here. Use Fill rest for the rest of the form, and if the form has more pages, go to the next one.</div>';
       }
       for (const item of items) {
         const box = document.createElement('div');
@@ -386,6 +554,7 @@
       });
       startWatching();
       root.querySelector('.rescan').addEventListener('click', render);
+      root.querySelector('.fill-rest').addEventListener('click', fillRest);
       const all = root.querySelector('.all');
       all.addEventListener('click', () => draft(items.filter((item) => !item.hidden)));
       const fillAll = root.querySelector('.fill-all');
@@ -409,7 +578,7 @@
       observer = new MutationObserver(() => {
         clearTimeout(watchTimer);
         watchTimer = setTimeout(() => {
-          if (host ? questionsChanged() : findQuestions().length) render();
+          if (host ? questionsChanged() : count()) render();
         }, 800);
       });
       observer.observe(document.body, { childList: true, subtree: true });
@@ -421,8 +590,9 @@
       host = null;
     }
 
+    const count = () => findQuestions().length || (isApplication() ? 1 : 0);
     window.__jobtrackerAnswers = {
-      count: () => findQuestions().length,
+      count,
       // Called on every page load in a tab with the panel open; leaves an up-to-date panel alone
       open: () => { if (!host || questionsChanged()) render(); },
       watch: () => { if (!host) startWatching(); },

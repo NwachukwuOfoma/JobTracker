@@ -9,6 +9,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   else if (message?.type === 'draft-answers') work = draftAnswers(sender.tab, message);
   else if (message?.type === 'panel-closed') work = hidePanel(sender.tab);
   else if (message?.type === 'auto-open-off') work = setAutoOpen(false);
+  else if (message?.type === 'fill-choices') work = api({ url: 'http://localhost:5050/' }, '/api/fill_choices', { ...message, urls: [sender.tab.url, message.frameUrl] });
   else if (message?.type === 'save-answer') work = api({ url: 'http://localhost:5050/' }, '/api/save_answer', { ...message, urls: [sender.tab.url, message.frameUrl] });
   else return;
   work.then(sendResponse, (e) => sendResponse({ error: String(e) }));
@@ -113,6 +114,8 @@ chrome.tabs.onUpdated.addListener((id, change) => { if (change.url) refreshCount
 async function showPanel(tabId, auto = false) {
   let results = [];
   try {
+    // The dropdown helper has to run in the page's own world (see page_select.js)
+    await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['page_select.js'], world: 'MAIN' });
     results = await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['answer_panel.js'] });
   } catch (e) {
     return; // a page extensions can't touch, like chrome:// pages or the Web Store
