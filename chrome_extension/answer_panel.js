@@ -40,9 +40,13 @@
         if (field.getAttribute('role') === 'combobox' || field.hasAttribute('aria-autocomplete') ||
             field.getAttribute('aria-hidden') === 'true' || field.hasAttribute('list')) continue;
         const label = labelFor(field);
-        if (!label || label.length < 8 || SKIP.test(label.slice(0, 60))) continue;
+        if (!label || label.length < 8) continue;
+        // Contact fields have short labels; a long question that mentions GitHub or a link still counts
+        const isQuestion = label.length >= 50 && OPEN_ENDED.test(label);
+        if (SKIP.test(label) && !isQuestion) continue;
         // Short text boxes count only when they're clearly asking something
         if (field.tagName !== 'TEXTAREA' && !(label.length >= 30 && OPEN_ENDED.test(label))) continue;
+        if (found.some((q) => q.field === field)) continue;
         const max = Number(field.getAttribute('maxlength')) || null;
         found.push({ field, label, maxLength: max && max > 0 && max < 100000 ? max : null });
       }
