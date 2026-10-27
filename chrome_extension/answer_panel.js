@@ -308,7 +308,8 @@
 
     function rules(P) {
       const worksHere = () => (P.past_employers || []).some((e) => new RegExp(`\\b${escapeRe(e)}\\b`, 'i').test(`${document.title} ${location.hostname}`));
-      const text = (value) => (b) => (b.kind === 'text' || b.kind === 'search' ? value : '');
+      // A null answer means "not this rule": the next matching rule gets a turn
+      const text = (value) => (b) => (b.kind === 'text' || b.kind === 'search' ? value : null);
       return [
         // Opt-ins come before consents, since "I agree to receive texts" is an opt-in
         [/\b(sms|text messages?|whatsapp|marketing|newsletter|promotional|talent (community|network)|future (job )?opportunit|job alerts?)\b/, N],
@@ -349,7 +350,8 @@
         [/salary|compensation|pay (expectation|range|requirement)|desired pay|expected pay/, (b) => (b.kind === 'text'
           ? (b.field?.type === 'number' || /number|numeric|annual|usd|\$|amount/i.test(b.label) ? P.salary_number : P.salary_text)
           : rangeOption(b.options, Number(P.salary_number)))],
-        [/acknowledg|consent|agree|certif|attest|confirm|privacy|terms|accurate|read and understand/, Y],
+        // Consent applies to checkboxes and choices; a text box like "Confirm your email" falls through
+        [/acknowledg|consent|agree|certif|attest|confirm|privacy|terms|accurate|read and understand/, (b) => (b.kind === 'text' ? null : Y(b))],
         // Contact and background details
         [/preferred (first )?name|first name|given name/, text(P.first_name)],
         [/last name|surname|family name/, text(P.last_name)],
@@ -371,7 +373,11 @@
     function answerFor(blank, P) {
       // "United States" would otherwise trip the state rule
       const question = blank.label.toLowerCase().replace(/united states/g, 'usa');
-      for (const [pattern, decide] of rules(P)) if (pattern.test(question)) return decide(blank) || '';
+      for (const [pattern, decide] of rules(P)) {
+        if (!pattern.test(question)) continue;
+        const answer = decide(blank);
+        if (answer !== null) return answer || '';
+      }
       return '';
     }
 
@@ -396,16 +402,23 @@
       return !!option;
     }
 
-    // Attaches your newest resume to empty resume uploads (never cover letters)
+    // Attaches your newest resume to the form's resume upload. Uploads labeled as a
+    // resume or CV come first; otherwise the first upload that isn't for another kind of
+    // document (some forms just say "Upload"). Returns 'attached', 'already' or 'none'.
     async function attachResume() {
-      const uploads = deepAll('input[type="file"]').filter((input) => {
-        const box = closestDeep(input, ENTRY) || up(input);
-        const context = `${input.name} ${input.id} ${labelFor(input)} ${box ? deepText(box).slice(0, 120) : ''}`;
-        return !input.files.length && /resume|\bcv\b/i.test(context) && !/cover/i.test(context);
+      const empty = deepAll('input[type="file"]').filter((input) => !input.files.length).map((input) => {
+        const box = closestDeep(input, ENTRY) || up(up(input) || input);
+        return { input, context: `${input.name} ${input.id} ${input.getAttribute('aria-label') || ''} ${labelFor(input)} ${box ? deepText(box).slice(0, 200) : ''}` };
       });
-      if (!uploads.length) return 0;
+      const otherDocument = /cover|transcript|portfolio|writing sample|additional|other document|photo|headshot|certificat/i;
+      let uploads = empty.filter((u) => /resume|\bcv\b|résumé/i.test(u.context) && !otherDocument.test(u.context));
+      if (!uploads.length) uploads = empty.filter((u) => !otherDocument.test(u.context)).slice(0, 1);
+      if (!uploads.length) return deepAll('input[type="file"]').some((input) => input.files.length) ? 'already' : 'none';
       const resume = await new Promise((resolve) => chrome.runtime.sendMessage({ type: 'get-resume' }, resolve));
-      if (!resume || resume.error) return 0;
+      if (!resume || resume.error) return 'none';
+      // Forms that move the file elsewhere after an upload show its name instead
+      if (deepText(document.body).includes(resume.name.replace(/\.[a-z]+$/i, ''))) return 'already';
+      uploads = uploads.map((u) => u.input);
       const bytes = Uint8Array.from(atob(resume.data), (c) => c.charCodeAt(0));
       for (const input of uploads) {
         const transfer = new DataTransfer();
@@ -414,7 +427,7 @@
         input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
         input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
       }
-      return uploads.length;
+      return 'attached';
     }
 
     let profile = null;
@@ -607,8 +620,8 @@
           if (!result || result.error) throw new Error(result?.error || 'No response. Is the JobTracker server running?');
           profile = result.profile;
         }
-        const attached = await attachResume();
-        if (attached) await sleep(1500); // some forms read the resume and fill fields from it
+        const resume = await attachResume();
+        if (resume === 'attached') await sleep(1500); // some forms read the resume and fill fields from it
         // A few passes: answering one question can reveal another (race appears after
         // Hispanic/Latino). Search boxes go last, since an open one blocks typing elsewhere.
         let filled = 0;
@@ -632,7 +645,8 @@
           blank.target.style.outlineOffset = '2px';
           blank.target.setAttribute('data-jt-left', '');
         }
-        setStatus(`${attached ? 'Attached your resume. ' : ''}Filled ${filled} field${filled === 1 ? '' : 's'}.` +
+        const resumeNote = { attached: 'Attached your resume. ', already: 'Resume already attached. ', none: 'No resume upload found on this page. ' }[resume];
+        setStatus(`${resumeNote}Filled ${filled} field${filled === 1 ? '' : 's'}.` +
           (left.size ? ` ${left.size} required left for you, outlined in orange.` : ' Check the form, then draft the written answers.'));
       } catch (e) {
         setStatus(String(e.message || e), true);
