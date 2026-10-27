@@ -15,7 +15,7 @@ sys.path.insert(0, str(BASE_DIR))
 from jobs import run_fetch_pipeline
 from tracker.database import get_tracked_jobs, update_jobs_status_bulk, update_job_status
 from tracker.normalizer import normalize_url
-from tracker.answer_drafter import draft_answers
+from tracker.answer_drafter import draft_answers, save_answer
 
 PORT = 5050
 HOST = "127.0.0.1"
@@ -181,6 +181,22 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
                 result = draft_answers(
                     data.get("urls", []), data.get("title", ""), data.get("page_text", ""), data.get("questions", [])
                 )
+            except Exception as e:
+                result = {"error": str(e)}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
+            return
+
+        if parsed.path == "/api/save_answer":
+            # An answer you filled in or copied from the panel, remembered for similar questions
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            try:
+                data = json.loads(body)
+                result = save_answer(data.get("urls", []), data.get("question", ""), data.get("note", ""), data.get("answer", ""))
             except Exception as e:
                 result = {"error": str(e)}
             self.send_response(200)

@@ -1,4 +1,6 @@
 import json
+import re
+from datetime import date
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -17,6 +19,11 @@ MODEL = "claude-opus-5-5"
 # outside the repository; answers may only use facts from here, the resume or the note.
 FACTS_FILE = Path.home() / ".config" / "jobtracker" / "answer_facts.md"
 MAX_PAGE_CHARS = 8000
+# Answers the candidate approved (filled in or copied), one JSON object per line. Similar
+# past answers are shown when drafting, so their stories and angles carry over.
+HISTORY_FILE = Path.home() / ".config" / "jobtracker" / "answer_history.jsonl"
+MAX_EXAMPLES = 40
+STOPWORDS = set("a an and are as at be by can describe did do does for from has have how i in is it its me of on or our please share tell that the this to us was we were what when where which who why will with you your".split())
 
 STYLE = """You draft answers to the open-ended questions on a job application, written as the candidate in the first person. They paste your answers in as their own, so write the way a thoughtful person writes, not like marketing copy.
 
@@ -43,6 +50,9 @@ Voice:
 - Never use these phrases or close variants: "autonomous AI pipelines", "automated data workflows", "real-time visual outputs", "end-to-end product lifecycle", "low-latency, production-grade systems", "solving complex infrastructure challenges", "high-velocity engineering", "my background in [project]", "perfectly aligns", "I am eager to leverage", "passionate about leveraging", "the intersection of", "cutting-edge", "seamless".
 - Don't overclaim seniority. This is a new grad with internships, an AI Master's and real shipped projects.
 
+Past answers:
+- <past_answers> holds answers the candidate approved for earlier applications, with the note they gave. Most will be unrelated; for a question that asks for the same kind of story (even worded differently), reuse the same story, angle and details (the candidate signed off on them), rewritten for this company and question rather than copied word for word. A note on the current question always wins over a past answer.
+
 Give one answer per question, in the order given."""
 
 
@@ -51,6 +61,59 @@ def _load_facts() -> str:
         return FACTS_FILE.read_text().strip()
     except OSError:
         return ""
+
+
+def _words(text: str) -> set:
+    return {w for w in re.findall(r"[a-z0-9+#]+", text.lower()) if w not in STOPWORDS and len(w) > 2}
+
+
+def _load_history() -> List[Dict]:
+    try:
+        lines = HISTORY_FILE.read_text().splitlines()
+    except OSError:
+        return []
+    history = []
+    for line in lines:
+        try:
+            history.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return history
+
+
+def _similar_examples(questions: List[Dict]) -> List[Dict]:
+    """
+    Past answers to show the model: those whose questions share the most words with
+    these ones, topped up with the most recent. Word overlap misses rephrasings
+    ("vague problem" vs "ambiguity"), so the model judges which are actually similar.
+    """
+    history = _load_history()
+    scored = {}
+    for q in questions:
+        words = _words(q["label"])
+        for i, past in enumerate(history):
+            other = _words(past["question"])
+            if words and other:
+                scored[i] = max(scored.get(i, 0), len(words & other) / len(words | other))
+    # Best matches first; among equals (and for the top-up), the newest first
+    ranked = sorted(range(len(history)), key=lambda i: (scored.get(i, 0) >= 0.15, scored.get(i, 0), i), reverse=True)
+    return [history[i] for i in ranked[:MAX_EXAMPLES]]
+
+
+def save_answer(urls: List[str], question: str, note: str, answer: str) -> Dict:
+    """Records an answer the candidate filled in or copied (the latest copy of each replaces older ones)."""
+    if not question or not answer.strip():
+        return {"saved": False}
+    job = _find_job(urls)
+    entry = {
+        "question": question, "note": note, "answer": answer.strip(),
+        "company": job["company"] if job else "", "date": date.today().isoformat(),
+    }
+    history = [h for h in _load_history() if not (h["question"] == question and h.get("company") == entry["company"])]
+    history.append(entry)
+    HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    HISTORY_FILE.write_text("".join(json.dumps(h) + "\n" for h in history))
+    return {"saved": True}
 
 
 def _find_job(urls: List[str]) -> Optional[Dict]:
@@ -109,8 +172,16 @@ def draft_answers(urls: List[str], page_title: str, page_text: str, questions: L
         if q.get("previous"):
             lines.append(f"The candidate didn't like this draft, so write a clearly different one: {q['previous']}")
         lines.append("")
+    past = ""
+    examples = _similar_examples(questions)
+    if examples:
+        past = "<past_answers>\n" + "\n\n".join(
+            f"Question: {e['question']}\n" + (f"Note: {e['note']}\n" if e.get("note") else "") + f"Approved answer: {e['answer']}"
+            for e in examples
+        ) + "\n</past_answers>\n\n"
     user = (
         f"<job>\n{about_job}\n\n{context or '(no description available)'}\n</job>\n\n"
+        + past
         + "\n".join(lines)
     )
     system = [

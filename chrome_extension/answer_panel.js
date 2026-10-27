@@ -71,6 +71,7 @@
         background: #ffffff; color: #1f2328; border: 1px solid #d0d7de; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
       header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #d0d7de; }
       header b { flex: 1; font-size: 14px; }
+      .actions { display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #eaeef2; }
       .job { padding: 6px 12px; color: #59636e; font-size: 12px; border-bottom: 1px solid #eaeef2; }
       .list { flex: 1; overflow-y: auto; padding: 8px 12px 16px; }
       .q { border: 1px solid #d0d7de; border-radius: 8px; padding: 10px; margin-top: 10px; }
@@ -96,6 +97,7 @@
         .panel { background: #161b22; color: #e6edf3; border-color: #30363d; }
         header, .q { border-color: #30363d; }
         .job, .status { border-color: #21262d; color: #9198a1; }
+        .actions { border-color: #21262d; }
         .limit, .count, .empty { color: #9198a1; }
         textarea, button { background: #21262d; border-color: #30363d; }
         textarea.answer { background: #0d1117; }
@@ -133,6 +135,16 @@
         }
         await chrome.storage.local.set({ [SAVE_KEY]: saved });
       }, 300);
+    }
+
+    // An answer you fill in or copy counts as approved: the server remembers it so
+    // later drafts for similar questions reuse the same story
+    function remember(item) {
+      if (!item.answer.value.trim()) return;
+      chrome.runtime.sendMessage({
+        type: 'save-answer', frameUrl: location.href,
+        question: item.label, note: item.note.value.trim(), answer: item.answer.value,
+      });
     }
 
     function draft(targets) {
@@ -182,10 +194,13 @@
       root.innerHTML = `<style>${CSS_TEXT}</style>
         <div class="panel" role="dialog" aria-label="JobTracker answers">
           <header><b>Application answers</b>
-            <button class="rescan" title="Look for questions again (e.g. after moving to the next page of the form)">Rescan</button>
-            <button class="primary all">Draft all</button>
             <button class="pause" title="Stop opening this panel by itself on job pages (click the toolbar icon to turn it back on)">Pause</button>
             <button class="close" aria-label="Close" title="Hide on this page">✕</button></header>
+          <div class="actions">
+            <button class="primary all">Draft all</button>
+            <button class="fill-all" title="Put every drafted answer into its form field">Fill all</button>
+            <button class="rescan" title="Look for questions again (e.g. after moving to the next page of the form)">Rescan</button>
+          </div>
           <div class="job">${items.length} open-ended question${items.length === 1 ? '' : 's'} on this page</div>
           <div class="list"></div>
           <div class="status">Add a note to steer any answer (e.g. "say it was my Chimagine app"), then Draft all.</div>
@@ -229,6 +244,7 @@
         copy.textContent = 'Copy';
         copy.addEventListener('click', async () => {
           await navigator.clipboard.writeText(item.answer.value);
+          remember(item);
           copy.textContent = 'Copied';
           setTimeout(() => { copy.textContent = 'Copy'; }, 1200);
         });
@@ -237,6 +253,7 @@
         fillButton.title = 'Put this answer into the form field';
         fillButton.addEventListener('click', () => {
           fill(item.field, item.answer.value);
+          remember(item);
           item.field.scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
         row.append(item.count, redo, copy, fillButton);
@@ -266,6 +283,13 @@
       const all = root.querySelector('.all');
       all.disabled = !items.length;
       all.addEventListener('click', () => draft(items));
+      const fillAll = root.querySelector('.fill-all');
+      fillAll.disabled = !items.length;
+      fillAll.addEventListener('click', () => {
+        const ready = items.filter((item) => item.answer.value.trim());
+        ready.forEach((item) => { fill(item.field, item.answer.value); remember(item); });
+        setStatus(ready.length ? `Filled ${ready.length} answer${ready.length === 1 ? '' : 's'} into the form.` : 'Nothing to fill yet; draft the answers first.');
+      });
     }
 
     let observer = null;
