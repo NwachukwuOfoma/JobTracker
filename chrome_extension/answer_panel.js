@@ -11,30 +11,60 @@
 
     const clean = (text) => (text || '').replace(/[*✱]/g, '').replace(/\s+/g, ' ').trim().slice(0, 700);
 
+    // Some forms (SmartRecruiters) build their fields inside web components' shadow
+    // DOM, which ordinary queries don't reach. These look inside open shadow roots
+    // (never this panel's own) and step back out to the host when walking up.
+    function deepAll(selector, root = document) {
+      const found = [...root.querySelectorAll(selector)];
+      for (const el of root.querySelectorAll('*')) {
+        if (el.shadowRoot && el.id !== 'jobtracker-answers') found.push(...deepAll(selector, el.shadowRoot));
+      }
+      return found;
+    }
+    const up = (el) => el.parentElement || el.parentNode?.host || null;
+    function closestDeep(el, selector) {
+      for (let node = el; node; node = up(node)) if (node.matches?.(selector)) return node;
+      return null;
+    }
+    // Ids and label[for] are looked up in the field's own (shadow) root first
+    const inRoot = (el, selector) => el.getRootNode().querySelector?.(selector) || document.querySelector(selector);
+    const byId = (el, id) => el.getRootNode().getElementById?.(id) || document.getElementById(id);
+    // Text as shown, including what components render inside their shadow roots
+    function deepText(node) {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+      if (!node.childNodes || node.matches?.('script, style')) return '';
+      if (node.localName === 'slot') return node.assignedNodes({ flatten: true }).map(deepText).join(' ');
+      const children = node.shadowRoot ? node.shadowRoot.childNodes : node.childNodes;
+      const text = [...children].map(deepText).join(' ');
+      return /^(p|div|li|label|legend|h\d|br|tr)$/.test(node.localName || '') ? `${text}\n` : text;
+    }
+
     function labelFor(field) {
       if (field.id) {
-        const label = document.querySelector(`label[for="${CSS.escape(field.id)}"]`);
+        const label = inRoot(field, `label[for="${CSS.escape(field.id)}"]`);
         if (label && clean(label.innerText)) return clean(label.innerText);
       }
       const labelledBy = field.getAttribute('aria-labelledby');
       if (labelledBy) {
-        const text = labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' ');
+        const text = labelledBy.split(/\s+/).map((id) => byId(field, id)?.innerText || '').join(' ');
         if (clean(text)) return clean(text);
       }
       if (clean(field.getAttribute('aria-label'))) return clean(field.getAttribute('aria-label'));
-      const wrapping = field.closest('label');
+      const wrapping = closestDeep(field, 'label');
       if (wrapping && clean(wrapping.innerText)) return clean(wrapping.innerText);
       // Otherwise the nearest container with its own text: the question sits just above the box
-      let node = field.parentElement;
-      for (let depth = 0; node && depth < 5; depth++, node = node.parentElement) {
-        const heading = node.querySelector('label, legend, h2, h3, h4, [class*="label" i], [class*="question" i], p');
+      let node = up(field);
+      for (let depth = 0; node && depth < 5; depth++, node = up(node)) {
+        // Components often take their label as an attribute (<spl-input label="Email">)
+        if (node !== field && node.localName?.includes('-') && clean(node.getAttribute('label'))) return clean(node.getAttribute('label'));
+        const heading = node.querySelector?.('label, legend, h2, h3, h4, [class*="label" i], [class*="question" i], p');
         if (heading && !heading.contains(field) && clean(heading.innerText)) return clean(heading.innerText);
       }
       return clean(field.getAttribute('placeholder'));
     }
 
     function findQuestions() {
-      const fields = [...document.querySelectorAll('textarea, input[type="text"], input:not([type])')];
+      const fields = deepAll('textarea, input[type="text"], input:not([type])');
       const found = [];
       for (const field of fields) {
         if (field.disabled || field.readOnly || !field.getClientRects().length) continue;
@@ -60,8 +90,8 @@
     function fill(field, value) {
       const proto = field.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(field, value);
-      field.dispatchEvent(new Event('input', { bubbles: true }));
-      field.dispatchEvent(new Event('change', { bubbles: true }));
+      field.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      field.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
     }
 
     // ---- Fill rest: the form's other blanks (resume, dropdowns, yes/no questions,
@@ -85,11 +115,11 @@
 
     // Custom-styled radios and checkboxes often hide the input and show its label
     const shown = (el) => !!el && (!!el.getClientRects().length ||
-      !!(el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.getClientRects().length) ||
-      !!el.closest('label')?.getClientRects().length);
+      !!(el.id && inRoot(el, `label[for="${CSS.escape(el.id)}"]`)?.getClientRects().length) ||
+      !!closestDeep(el, 'label')?.getClientRects().length);
 
     function optionText(input) {
-      const label = (input.id && document.querySelector(`label[for="${CSS.escape(input.id)}"]`)) || input.closest('label');
+      const label = (input.id && inRoot(input, `label[for="${CSS.escape(input.id)}"]`)) || closestDeep(input, 'label');
       return clean(label?.innerText || input.getAttribute('aria-label') || input.value || input.textContent);
     }
 
@@ -98,21 +128,27 @@
 
     // The question above a group of options: its legend, its ARIA label, or the text
     // of the nearest container holding the whole group, minus the options' own labels
-    function groupLabel(inputs) {
-      const legend = inputs[0].closest('fieldset')?.querySelector('legend');
+    // `related` are the group's own hidden companions (Ashby keeps a hidden checkbox
+    // beside its Yes/No buttons): they belong to this question, not another one
+    function groupLabel(inputs, related = []) {
+      const legend = closestDeep(inputs[0], 'fieldset')?.querySelector('legend');
       if (legend && clean(legend.innerText)) return clean(legend.innerText);
-      const group = inputs[0].closest('[role="radiogroup"], [role="group"]');
+      const group = closestDeep(inputs[0], '[role="radiogroup"], [role="group"]');
       const labelledBy = group?.getAttribute('aria-labelledby');
       if (labelledBy) {
-        const text = clean(labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' '));
+        const text = clean(labelledBy.split(/\s+/).map((id) => byId(inputs[0], id)?.innerText || '').join(' '));
         if (text) return text;
       }
       if (clean(group?.getAttribute('aria-label'))) return clean(group.getAttribute('aria-label'));
       const optionTexts = inputs.map(optionText).filter(Boolean);
-      let node = inputs[0].parentElement;
-      for (let depth = 0; node && depth < 8; depth++, node = node.parentElement) {
-        if (!inputs.every((i) => node.contains(i))) continue;
-        let text = node.innerText || '';
+      const within = (node, el) => { for (let n = el; n; n = up(n)) if (n === node) return true; return false; };
+      let node = up(inputs[0]);
+      const fieldsIn = (n) => [...deepAll('input, select, textarea', n), ...(n.shadowRoot ? deepAll('input, select, textarea', n.shadowRoot) : [])];
+      for (let depth = 0; node && depth < 8; depth++, node = up(node)) {
+        if (![...inputs, ...related].every((i) => within(node, i))) continue;
+        // Past this point the text belongs to other questions too
+        if (fieldsIn(node).some((f) => !inputs.includes(f) && !related.includes(f) && f.type !== 'hidden')) break;
+        let text = deepText(node);
         for (const option of optionTexts) text = text.replace(option, ' ');
         if (clean(text).length >= 3) return clean(text).slice(0, 300);
       }
@@ -127,10 +163,11 @@
       const fields = [blank.field, blank.input, own, ...(blank.inputs || [])].filter(Boolean);
       if (fields.some((f) => f.required || f.getAttribute('aria-required') === 'true')) return true;
       for (const field of fields) {
-        const label = field.id && document.querySelector(`label[for="${CSS.escape(field.id)}"]`);
+        const label = field.id && inRoot(field, `label[for="${CSS.escape(field.id)}"]`);
         if (label && /[*✱]/.test(label.innerText)) return true;
       }
-      return /[*✱]|required/i.test((target.closest(ENTRY) || target.parentElement)?.innerText.slice(0, 400) || '');
+      const box = closestDeep(target, ENTRY) || up(target);
+      return /[*✱]|required/i.test(box ? deepText(box).slice(0, 400) : '');
     }
 
     function findBlanks() {
@@ -140,23 +177,24 @@
 
       // Yes/No button pairs (Ashby): unanswered while neither is pressed
       const pairs = new Map();
-      for (const button of document.querySelectorAll('button')) {
+      for (const button of deepAll('button')) {
         if (!/^(yes|no)$/i.test(clean(button.textContent)) || !shown(button)) continue;
-        if (!pairs.has(button.parentElement)) pairs.set(button.parentElement, []);
-        pairs.get(button.parentElement).push(button);
+        if (!pairs.has(up(button))) pairs.set(up(button), []);
+        pairs.get(up(button)).push(button);
       }
       const pairEntries = [];
       for (const [parent, buttons] of pairs) {
         if (buttons.length < 2) continue;
-        pairEntries.push(parent.closest(ENTRY) || parent.parentElement);
+        const entry = closestDeep(parent, ENTRY) || up(parent);
+        pairEntries.push(entry);
         if (buttons.some((b) => b.getAttribute('aria-pressed') === 'true' || /active|selected/i.test(b.className))) continue;
         add({
-          kind: 'choice', label: groupLabel(buttons), options: buttons.map((b) => clean(b.textContent)), target: parent,
+          kind: 'choice', label: groupLabel(buttons, entry ? deepAll('input', entry) : []), options: buttons.map((b) => clean(b.textContent)), target: parent,
           apply: (value) => { const b = buttons.find((x) => clean(x.textContent) === value); b?.click(); return !!b; },
         });
       }
 
-      for (const select of document.querySelectorAll('select')) {
+      for (const select of deepAll('select')) {
         if (select.disabled || !shown(select)) continue;
         const options = [...select.options].filter((o) => o.value !== '' && !/^\s*(select|choose|--|please)/i.test(o.text));
         if (!options.length || options.includes(select.selectedOptions[0])) continue;
@@ -166,8 +204,8 @@
             const option = options.find((o) => clean(o.text) === value);
             if (!option) return false;
             Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(select, option.value);
-            select.dispatchEvent(new Event('input', { bubbles: true }));
-            select.dispatchEvent(new Event('change', { bubbles: true }));
+            select.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+            select.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
             return true;
           },
         });
@@ -176,19 +214,20 @@
       // Radio and checkbox groups, grouped by the question block they sit in (some forms
       // reuse one name across several questions)
       const groups = new Map();
-      for (const input of document.querySelectorAll('input[type="radio"], input[type="checkbox"]')) {
-        if (input.disabled || !shown(input) || pairEntries.some((entry) => entry?.contains(input))) continue;
-        const key = input.closest(ENTRY) || (input.name ? `${input.type}:${input.name}` : input);
+      for (const input of deepAll('input[type="radio"], input[type="checkbox"]')) {
+        if (input.disabled || !shown(input) || pairEntries.some((entry) => entry && closestDeep(input, ENTRY) === entry)) continue;
+        const key = closestDeep(input, ENTRY) || (input.name ? `${input.type}:${input.name}` : input);
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(input);
       }
       for (const inputs of groups.values()) {
         if (inputs.some((i) => i.checked)) continue;
-        const target = inputs[0].closest(ENTRY) || inputs[0].parentElement;
+        const target = closestDeep(inputs[0], ENTRY) || up(inputs[0]);
         if (inputs.length === 1 && inputs[0].type === 'checkbox') {
           const box = inputs[0];
           add({
-            kind: 'checkbox', label: clean(`${groupLabel(inputs)} ${optionText(box)}`), options: ['checked', 'unchecked'], target, inputs,
+            kind: 'checkbox', label: optionText(box).length >= 8 ? optionText(box) : clean(`${groupLabel(inputs)} ${optionText(box)}`),
+            options: ['checked', 'unchecked'], target, inputs,
             apply: (value) => { if (value === 'checked' && !box.checked) box.click(); return true; },
           });
         } else {
@@ -200,10 +239,10 @@
       }
 
       // Comboboxes: React dropdowns with their options, or search boxes (location)
-      for (const input of document.querySelectorAll('input[role="combobox"]')) {
+      for (const input of deepAll('input[role="combobox"]')) {
         if (!shown(input)) continue;
         const state = pageSelect('state', input);
-        const target = input.closest('[class*="control"]') || input;
+        const target = closestDeep(input, '[class*="control"]') || input;
         if (state && !state.empty) continue;
         if (!state && input.value) continue;
         if (state && state.options.length) {
@@ -214,7 +253,7 @@
       }
 
       const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input[type="date"], input:not([type])';
-      for (const field of document.querySelectorAll(textFields)) {
+      for (const field of deepAll(textFields)) {
         if (written.has(field) || field.value || field.disabled || field.readOnly || !shown(field)) continue;
         if (field.getAttribute('role') === 'combobox' || field.hasAttribute('aria-autocomplete') || field.getAttribute('aria-hidden') === 'true') continue;
         const label = labelFor(field);
@@ -350,7 +389,7 @@
       }
       fill(blank.input, value);
       await sleep(1500);
-      const options = [...document.querySelectorAll('[role="option"]')].filter((o) => o.getClientRects().length);
+      const options = deepAll('[role="option"]').filter((o) => o.getClientRects().length);
       const text = pick(options.map((o) => clean(o.textContent)), prefer);
       const option = options.find((o) => clean(o.textContent) === text);
       option?.click();
@@ -359,8 +398,9 @@
 
     // Attaches your newest resume to empty resume uploads (never cover letters)
     async function attachResume() {
-      const uploads = [...document.querySelectorAll('input[type="file"]')].filter((input) => {
-        const context = `${input.name} ${input.id} ${labelFor(input)} ${(input.closest(ENTRY) || input.parentElement)?.innerText.slice(0, 120) || ''}`;
+      const uploads = deepAll('input[type="file"]').filter((input) => {
+        const box = closestDeep(input, ENTRY) || up(input);
+        const context = `${input.name} ${input.id} ${labelFor(input)} ${box ? deepText(box).slice(0, 120) : ''}`;
         return !input.files.length && /resume|\bcv\b/i.test(context) && !/cover/i.test(context);
       });
       if (!uploads.length) return 0;
@@ -371,8 +411,8 @@
         const transfer = new DataTransfer();
         transfer.items.add(new File([bytes], resume.name, { type: resume.type }));
         input.files = transfer.files;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
       }
       return uploads.length;
     }
@@ -380,7 +420,7 @@
     let profile = null;
 
     // An application form (it takes a resume) still counts as worth a panel with no written questions
-    const isApplication = () => !!document.querySelector('input[type="file"]');
+    const isApplication = () => deepAll('input[type="file"]').length > 0;
 
     let host = null;
     let items = [];
@@ -554,7 +594,7 @@
     }
 
     async function fillRest() {
-      for (const el of document.querySelectorAll('[data-jt-left]')) {
+      for (const el of deepAll('[data-jt-left]')) {
         el.style.outline = '';
         el.removeAttribute('data-jt-left');
       }

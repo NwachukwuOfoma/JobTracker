@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobTracker",
-  "version": "2.4",
+  "version": "2.5",
   "description": "Follows LinkedIn's Apply button when a job is opened from the JobTracker dashboard, lines up and counts your open job tabs by resume fit, and drafts answers to an application's open-ended questions when you click its icon.",
   "permissions": ["tabs", "scripting", "activeTab", "storage"],
   "host_permissions": ["<all_urls>"],
