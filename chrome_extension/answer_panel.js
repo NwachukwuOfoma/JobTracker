@@ -114,6 +114,27 @@
       item.count.classList.toggle('over', !!item.maxLength && len > item.maxLength);
     }
 
+    // Notes and drafts are saved per page and question, so Rescan or reloading the
+    // page or the extension doesn't lose them (kept for 30 days)
+    const SAVE_KEY = 'answers';
+    const keyFor = (item) => `${location.host}${location.pathname}|${item.label}`;
+    let saveTimer;
+    function save() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async () => {
+        const { [SAVE_KEY]: saved = {} } = await chrome.storage.local.get(SAVE_KEY);
+        const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+        for (const key of Object.keys(saved)) if (saved[key].t < cutoff) delete saved[key];
+        for (const item of items) {
+          const note = item.note.value;
+          const answer = item.answer.value;
+          if (note || answer) saved[keyFor(item)] = { note, answer, t: Date.now() };
+          else delete saved[keyFor(item)];
+        }
+        await chrome.storage.local.set({ [SAVE_KEY]: saved });
+      }, 300);
+    }
+
     function draft(targets) {
       const buttons = host.shadowRoot.querySelectorAll('button');
       buttons.forEach((b) => { b.disabled = true; });
@@ -141,12 +162,15 @@
           item.redo = false;
           updateCount(item);
         });
+        save();
         if (result.job) host.shadowRoot.querySelector('.job').textContent = `Matched job: ${result.job}`;
-        setStatus('Review each answer, then Copy or Fill. Anything in [add: …] needs a detail from you.');
+        setStatus('Review each answer and fix any detail that isn\'t right, then Copy or Fill.');
       });
     }
 
     function render() {
+      // What's typed in the panel right now carries over a Rescan, even before it's saved
+      const typed = new Map(items.map((item) => [item.label, { note: item.note.value, answer: item.answer.value }]));
       items = findQuestions().map((q) => ({ ...q, redo: false }));
       if (!host) {
         host = document.createElement('div');
@@ -190,7 +214,8 @@
         item.answer = document.createElement('textarea');
         item.answer.className = 'answer';
         item.answer.placeholder = 'The draft appears here; you can edit it.';
-        item.answer.addEventListener('input', () => updateCount(item));
+        item.note.addEventListener('input', save);
+        item.answer.addEventListener('input', () => { updateCount(item); save(); });
         const row = document.createElement('div');
         row.className = 'row';
         item.count = document.createElement('span');
@@ -218,6 +243,15 @@
         list.appendChild(box);
         updateCount(item);
       }
+      chrome.storage.local.get(SAVE_KEY).then(({ [SAVE_KEY]: saved = {} }) => {
+        for (const item of items) {
+          const previous = typed.get(item.label) || saved[keyFor(item)];
+          if (!previous || item.note.value || item.answer.value) continue;
+          item.note.value = previous.note || '';
+          item.answer.value = previous.answer || '';
+          updateCount(item);
+        }
+      });
       root.querySelector('.close').addEventListener('click', () => { host.remove(); host = null; });
       root.querySelector('.rescan').addEventListener('click', render);
       const all = root.querySelector('.all');
