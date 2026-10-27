@@ -9,7 +9,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   else if (message?.type === 'draft-answers') work = draftAnswers(sender.tab, message);
   else if (message?.type === 'panel-closed') work = hidePanel(sender.tab);
   else if (message?.type === 'auto-open-off') work = setAutoOpen(false);
-  else if (message?.type === 'fill-choices') work = api({ url: 'http://localhost:5050/' }, '/api/fill_choices', { ...message, urls: [sender.tab.url, message.frameUrl] });
+  else if (message?.type === 'get-profile') work = api({ url: 'http://localhost:5050/' }, '/api/profile', {});
+  else if (message?.type === 'get-resume') work = api({ url: 'http://localhost:5050/' }, '/api/resume', {});
   else if (message?.type === 'save-answer') work = api({ url: 'http://localhost:5050/' }, '/api/save_answer', { ...message, urls: [sender.tab.url, message.frameUrl] });
   else return;
   work.then(sendResponse, (e) => sendResponse({ error: String(e) }));

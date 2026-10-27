@@ -11,7 +11,7 @@ dedupes them in SQLite, scores fit and salary with Claude, and serves a dashboar
 - `tracker/job_details.py`: reads a posting's description per ATS (Workday, Greenhouse, Lever, Ashby, iCIMS, Oracle...)
 - `tracker/fit_scorer.py`, `tracker/salary_estimator.py`: Claude API calls
 - `tracker/exporter.py`: builds `new_jobs.html` (the dashboard UI lives here, not in server.py)
-- `tracker/answer_drafter.py`: drafts answers to application questions; personal facts live in `~/.config/jobtracker/answer_facts.md`, standard answers for "Fill rest" in `application_profile.md` and approved answers in `answer_history.jsonl` beside it (never in the repo)
+- `tracker/answer_drafter.py`: drafts answers to application questions; personal facts live in `~/.config/jobtracker/answer_facts.md`, standard answers for "Fill rest" in `application_profile.json` and approved answers in `answer_history.jsonl` beside it (never in the repo)
 - `chrome_extension/`: opens jobs as tabs and arranges them by fit; its toolbar icon opens the answer panel (`answer_panel.js`; `page_select.js` runs in the page to set React dropdowns)
 
 ## Hard rules

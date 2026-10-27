@@ -64,8 +64,9 @@
       field.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
-    // ---- Fill rest: the form's other blanks (dropdowns, yes/no buttons, checkboxes,
-    // short text), answered from your standard-answers profile on the server
+    // ---- Fill rest: the form's other blanks (resume, dropdowns, yes/no questions,
+    // checkboxes, short fields), matched to your standard answers by the rules below.
+    // No API calls, so it costs nothing.
 
     // React dropdowns are read and set by page_select.js in the page's own world;
     // the event round trip is synchronous, so the result is ready on return
@@ -80,6 +81,7 @@
       document.removeEventListener('jobtracker-select-result', listener);
       return result;
     }
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     // Custom-styled radios and checkboxes often hide the input and show its label
     const shown = (el) => !!el && (!!el.getClientRects().length ||
@@ -88,8 +90,11 @@
 
     function optionText(input) {
       const label = (input.id && document.querySelector(`label[for="${CSS.escape(input.id)}"]`)) || input.closest('label');
-      return clean(label?.innerText || input.getAttribute('aria-label') || input.value);
+      return clean(label?.innerText || input.getAttribute('aria-label') || input.value || input.textContent);
     }
+
+    // One question's block on the page (Ashby's fieldEntry, a fieldset, a role=group)
+    const ENTRY = 'fieldset, [role="radiogroup"], [role="group"], [class*="fieldEntry" i], [class*="field-entry" i]';
 
     // The question above a group of options: its legend, its ARIA label, or the text
     // of the nearest container holding the whole group, minus the options' own labels
@@ -114,15 +119,48 @@
       return '';
     }
 
+    // Required questions left unanswered get outlined; optional ones are just skipped.
+    // Required shows as the attribute, or an asterisk on the question's own label.
+    function isRequired(blank) {
+      const target = blank.target;
+      const own = target.matches('input, select, textarea') ? target : target.querySelector('input, select, textarea');
+      const fields = [blank.field, blank.input, own, ...(blank.inputs || [])].filter(Boolean);
+      if (fields.some((f) => f.required || f.getAttribute('aria-required') === 'true')) return true;
+      for (const field of fields) {
+        const label = field.id && document.querySelector(`label[for="${CSS.escape(field.id)}"]`);
+        if (label && /[*✱]/.test(label.innerText)) return true;
+      }
+      return /[*✱]|required/i.test((target.closest(ENTRY) || target.parentElement)?.innerText.slice(0, 400) || '');
+    }
+
     function findBlanks() {
       const written = new Set(findQuestions().map((q) => q.field));
       const blanks = [];
+      const add = (blank) => { if (blank.label) blanks.push({ ...blank, required: isRequired(blank) }); };
+
+      // Yes/No button pairs (Ashby): unanswered while neither is pressed
+      const pairs = new Map();
+      for (const button of document.querySelectorAll('button')) {
+        if (!/^(yes|no)$/i.test(clean(button.textContent)) || !shown(button)) continue;
+        if (!pairs.has(button.parentElement)) pairs.set(button.parentElement, []);
+        pairs.get(button.parentElement).push(button);
+      }
+      const pairEntries = [];
+      for (const [parent, buttons] of pairs) {
+        if (buttons.length < 2) continue;
+        pairEntries.push(parent.closest(ENTRY) || parent.parentElement);
+        if (buttons.some((b) => b.getAttribute('aria-pressed') === 'true' || /active|selected/i.test(b.className))) continue;
+        add({
+          kind: 'choice', label: groupLabel(buttons), options: buttons.map((b) => clean(b.textContent)), target: parent,
+          apply: (value) => { const b = buttons.find((x) => clean(x.textContent) === value); b?.click(); return !!b; },
+        });
+      }
 
       for (const select of document.querySelectorAll('select')) {
         if (select.disabled || !shown(select)) continue;
         const options = [...select.options].filter((o) => o.value !== '' && !/^\s*(select|choose|--|please)/i.test(o.text));
         if (!options.length || options.includes(select.selectedOptions[0])) continue;
-        blanks.push({
+        add({
           kind: 'choice', label: labelFor(select), options: options.map((o) => clean(o.text)), target: select,
           apply: (value) => {
             const option = options.find((o) => clean(o.text) === value);
@@ -135,43 +173,44 @@
         });
       }
 
+      // Radio and checkbox groups, grouped by the question block they sit in (some forms
+      // reuse one name across several questions)
       const groups = new Map();
       for (const input of document.querySelectorAll('input[type="radio"], input[type="checkbox"]')) {
-        if (input.disabled || !shown(input)) continue;
-        const key = input.name ? `${input.type}:${input.name}` : (input.closest('fieldset, [role="radiogroup"], [role="group"]') || input);
+        if (input.disabled || !shown(input) || pairEntries.some((entry) => entry?.contains(input))) continue;
+        const key = input.closest(ENTRY) || (input.name ? `${input.type}:${input.name}` : input);
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(input);
       }
       for (const inputs of groups.values()) {
         if (inputs.some((i) => i.checked)) continue;
-        const target = inputs[0].closest('fieldset, [role="radiogroup"], [role="group"]') || inputs[0].parentElement;
+        const target = inputs[0].closest(ENTRY) || inputs[0].parentElement;
         if (inputs.length === 1 && inputs[0].type === 'checkbox') {
           const box = inputs[0];
-          blanks.push({
-            kind: 'checkbox', label: clean(`${groupLabel(inputs)} ${optionText(box)}`), options: ['checked', 'unchecked'], target,
+          add({
+            kind: 'checkbox', label: clean(`${groupLabel(inputs)} ${optionText(box)}`), options: ['checked', 'unchecked'], target, inputs,
             apply: (value) => { if (value === 'checked' && !box.checked) box.click(); return true; },
           });
         } else {
-          blanks.push({
-            kind: 'choice', label: groupLabel(inputs), options: inputs.map(optionText), target,
-            apply: (value) => {
-              const input = inputs.find((i) => optionText(i) === value);
-              if (!input) return false;
-              input.click();
-              return true;
-            },
+          add({
+            kind: 'choice', label: groupLabel(inputs), options: inputs.map(optionText), target, inputs,
+            apply: (value) => { const input = inputs.find((i) => optionText(i) === value); input?.click(); return !!input; },
           });
         }
       }
 
+      // Comboboxes: React dropdowns with their options, or search boxes (location)
       for (const input of document.querySelectorAll('input[role="combobox"]')) {
         if (!shown(input)) continue;
         const state = pageSelect('state', input);
-        if (!state || !state.empty || !state.options.length) continue;
-        blanks.push({
-          kind: 'choice', label: labelFor(input), options: state.options, target: input.closest('[class*="control"]') || input,
-          apply: (value) => !!pageSelect('choose', input, value),
-        });
+        const target = input.closest('[class*="control"]') || input;
+        if (state && !state.empty) continue;
+        if (!state && input.value) continue;
+        if (state && state.options.length) {
+          add({ kind: 'choice', label: labelFor(input), options: state.options, target, apply: (value) => !!pageSelect('choose', input, value) });
+        } else if (/location|city|where (are you|do you live)|school|university|college|degree/i.test(labelFor(input))) {
+          add({ kind: 'search', label: labelFor(input), options: [], target, input, react: !!state });
+        }
       }
 
       const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input:not([type])';
@@ -180,10 +219,144 @@
         if (field.getAttribute('role') === 'combobox' || field.hasAttribute('aria-autocomplete') || field.getAttribute('aria-hidden') === 'true') continue;
         const label = labelFor(field);
         if (label.length < 3) continue;
-        blanks.push({ kind: 'text', label, options: [], target: field, apply: (value) => { fill(field, value); return true; } });
+        add({ kind: 'text', label, options: [], target: field, field, apply: (value) => { fill(field, value); return true; } });
       }
-      return blanks.filter((b) => b.label);
+      return blanks;
     }
+
+    // The rules: each matches a question's wording and picks an option (or text) from
+    // your profile. The first matching rule decides; no match leaves the field for you.
+    const DECLINE = [/prefer not|decline|don.?t wish|do not wish|not (to )?(answer|say|disclose|specify)|rather not/i];
+    function pick(options, patterns) {
+      for (const pattern of patterns) {
+        const option = options.find((o) => pattern.test(o));
+        if (option) return option;
+      }
+      return '';
+    }
+    const Y = (b) => (b.kind === 'checkbox' ? 'checked' : b.kind === 'text' ? 'Yes'
+      : pick(b.options, [/^yes\b/i, /^(i am|i'm|i do|i have|i can|i will)\b(?!.*\bnot\b)/i, /^(true|agree|accept)/i]));
+    const N = (b) => (b.kind === 'checkbox' ? 'unchecked' : b.kind === 'text' ? 'No'
+      : pick(b.options, [/^no\b/i, /\b(not|never|don.?t|do not|haven.?t|have not|won.?t|will not|am not)\b/i]));
+    const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    function rangeOption(options, value) {
+      for (const option of options) {
+        const nums = (option.replace(/,/g, '').match(/\d+(\.\d+)?\s*k?/gi) || []).map((n) => parseFloat(n) * (/k/i.test(n) ? 1000 : 1));
+        if (!nums.length) continue;
+        if (/under|younger|less than|below|up to/i.test(option) && nums.length === 1) { if (value < nums[0]) return option; continue; }
+        if (/over|older|more|above|\+/i.test(option) && nums.length === 1) { if (value >= nums[0]) return option; continue; }
+        if (nums.length >= 2 && value >= nums[0] && value <= nums[1]) return option;
+      }
+      return '';
+    }
+
+    function rules(P) {
+      const worksHere = () => (P.past_employers || []).some((e) => new RegExp(`\\b${escapeRe(e)}\\b`, 'i').test(`${document.title} ${location.hostname}`));
+      const text = (value) => (b) => (b.kind === 'text' || b.kind === 'search' ? value : '');
+      return [
+        // Opt-ins come before consents, since "I agree to receive texts" is an opt-in
+        [/\b(sms|text messages?|whatsapp|marketing|newsletter|promotional|talent (community|network)|future (job )?opportunit|job alerts?)\b/, N],
+        [/sponsor|visa|h-?1b|immigration/, N],
+        [/authori[sz]ed|eligible to work|legally (able|permitted)|right to work|work permit|employment eligib/, Y],
+        [/\b(usa|u\.s\.) citizen|citizenship/, (b) => pick(b.options, [/^yes\b/i, /^usa?$|united states|u\.s\./i])],
+        [/relocat/, Y],
+        [/18 years|at least 18|over 18|age of 18|legal (working )?age/, Y],
+        [/current age|your age|age range|how old/, (b) => rangeOption(b.options, P.age) || pick(b.options, DECLINE)],
+        [/clearance/, (b) => (/eligib|able to obtain|willing to (obtain|undergo)|could you obtain/i.test(b.label) ? Y(b)
+          : pick(b.options, [/^no\b/i, /none|not currently|do not (currently )?hold|don.?t have/i]))],
+        [/background check|drug (test|screen)|screening/, Y],
+        [/non-?compete|restrictive covenant|non-?solicit|agreements? that (would|could|might) (restrict|prevent|limit)|bound by/, N],
+        [/hybrid|in[- ]office|on[- ]?site|commute|work (out )?of our|times a week|days a week|from (our|the) office|in person/, Y],
+        [/(have you|ever) (previously |ever )?(worked|been employed)|previous(ly)? (employ|work)|former employee|current(ly)? (an? )?employ|are you a current/,
+          (b) => (worksHere() ? Y(b) : N(b))],
+        [/relative|family member|friends? (who )?work|related to anyone|know anyone/, N],
+        [/how did you (hear|find|learn)|where did you (hear|find|see|learn)|referral source|source of (this )?application|how were you referred/,
+          (b) => (b.kind === 'text' ? 'GitHub job board' : pick(b.options, (P.hear_about || []).map((h) => new RegExp(escapeRe(h), 'i'))))],
+        [/transgender/, (b) => pick(b.options, DECLINE)],
+        [/sexual orientation/, (b) => pick(b.options, DECLINE)],
+        [/hispanic|latin[oaxe]/, (b) => (P.hispanic ? Y(b) : pick(b.options, [/^no\b/i, /not hispanic/i]))],
+        [/\brace\b|ethnic/, (b) => pick(b.options, [new RegExp(escapeRe(P.race.split(' ')[0]), 'i')]) || pick(b.options, DECLINE)],
+        [/gender|\bsex\b/, (b) => pick(b.options, P.gender === 'male' ? [/^(male|man)\b/i] : [/^(female|woman)\b/i]) || pick(b.options, DECLINE)],
+        [/veteran/, (b) => (P.veteran ? Y(b) : pick(b.options, [/not a (protected )?veteran|i am not/i, /^no\b/i]))],
+        [/disabilit/, (b) => (P.disability ? Y(b) : pick(b.options, [/^no\b|do(n.?t| not) have a disability/i])) || pick(b.options, DECLINE)],
+        [/communit|belong to/, (b) => pick(b.options, [/none of the above/i]) || pick(b.options, DECLINE)],
+        [/pronoun/, () => ''],
+        [/\bgpa\b|grade point/, () => ''],
+        [/enrolled|graduat|currently a student/, (b) => pick(b.options, [/already graduated|^graduated|not (currently )?(enrolled|a student)|alumn/i])],
+        [/start date|start working|available to start|earliest|notice period/, (b) => (b.kind === 'text' ? P.start_date
+          : pick(b.options, [/immediate|asap|right away|^now/i, /2 weeks|two weeks/i]))],
+        [/salary|compensation|pay (expectation|range|requirement)|desired pay|expected pay/, (b) => (b.kind === 'text'
+          ? (b.field?.type === 'number' || /number|numeric|annual|usd|\$|amount/i.test(b.label) ? P.salary_number : P.salary_text)
+          : rangeOption(b.options, Number(P.salary_number)))],
+        [/acknowledg|consent|agree|certif|attest|confirm|privacy|terms|accurate|read and understand/, Y],
+        // Contact and background details
+        [/preferred (first )?name|first name|given name/, text(P.first_name)],
+        [/last name|surname|family name/, text(P.last_name)],
+        [/full name|legal name|^name\b|your name/, text(`${P.first_name} ${P.last_name}`)],
+        [/e-?mail/, text(P.email)],
+        [/phone|mobile|cell/, text(P.phone)],
+        [/linkedin/, text(P.linkedin)],
+        [/github/, text(P.github)],
+        [/website|portfolio|personal (site|url)/, text(P.website)],
+        [/\bcountry\b/, (b) => (b.kind === 'text' ? P.country : pick(b.options, [/^united states|^usa?$|^u\.s\./i]))],
+        [/\b(state|province)\b/, (b) => (b.kind === 'text' ? P.state : pick(b.options, [new RegExp(`^${escapeRe(P.state)}`, 'i'), /^il$/i]))],
+        [/\bcity\b|location|located|where (are you|do you live)|current address|based in/, (b) => (b.kind === 'text' || b.kind === 'search'
+          ? (b.kind === 'search' || /\bcity\b/i.test(b.label) ? P.city : P.location) : '')],
+        [/school|university|college|institution/, (b) => (b.kind === 'choice' ? pick(b.options, [/johns hopkins/i]) : P.school)],
+        [/degree/, (b) => (b.kind === 'text' ? P.degree : b.kind === 'search' ? 'Master' : pick(b.options, [/master/i]))],
+      ];
+    }
+
+    function answerFor(blank, P) {
+      // "United States" would otherwise trip the state rule
+      const question = blank.label.toLowerCase().replace(/united states/g, 'usa');
+      for (const [pattern, decide] of rules(P)) if (pattern.test(question)) return decide(blank) || '';
+      return '';
+    }
+
+    // Location search boxes: type the city, then pick the matching suggestion
+    async function fillSearch(blank, value) {
+      const prefer = [new RegExp(`${escapeRe(value)}.*(${escapeRe(profile.state)}|, il\\b)`, 'i'), new RegExp(`^${escapeRe(value)}`, 'i'),
+        new RegExp(escapeRe(value), 'i')];
+      if (blank.react) {
+        pageSelect('search', blank.input, value);
+        await sleep(1500);
+        const option = pick(pageSelect('state', blank.input)?.options || [], prefer);
+        const chosen = !!option && !!pageSelect('choose', blank.input, option);
+        pageSelect('close', blank.input);
+        return chosen;
+      }
+      fill(blank.input, value);
+      await sleep(1500);
+      const options = [...document.querySelectorAll('[role="option"]')].filter((o) => o.getClientRects().length);
+      const text = pick(options.map((o) => clean(o.textContent)), prefer);
+      const option = options.find((o) => clean(o.textContent) === text);
+      option?.click();
+      return !!option;
+    }
+
+    // Attaches your newest resume to empty resume uploads (never cover letters)
+    async function attachResume() {
+      const uploads = [...document.querySelectorAll('input[type="file"]')].filter((input) => {
+        const context = `${input.name} ${input.id} ${labelFor(input)} ${(input.closest(ENTRY) || input.parentElement)?.innerText.slice(0, 120) || ''}`;
+        return !input.files.length && /resume|\bcv\b/i.test(context) && !/cover/i.test(context);
+      });
+      if (!uploads.length) return 0;
+      const resume = await new Promise((resolve) => chrome.runtime.sendMessage({ type: 'get-resume' }, resolve));
+      if (!resume || resume.error) return 0;
+      const bytes = Uint8Array.from(atob(resume.data), (c) => c.charCodeAt(0));
+      for (const input of uploads) {
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([bytes], resume.name, { type: resume.type }));
+        input.files = transfer.files;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      return uploads.length;
+    }
+
+    let profile = null;
 
     // An application form (it takes a resume) still counts as worth a panel with no written questions
     const isApplication = () => !!document.querySelector('input[type="file"]');
@@ -359,47 +532,53 @@
       root.querySelector('.fill-all').disabled = !shown;
     }
 
-    function fillRest() {
+    async function fillRest() {
       for (const el of document.querySelectorAll('[data-jt-left]')) {
         el.style.outline = '';
         el.removeAttribute('data-jt-left');
       }
-      const blanks = findBlanks();
-      if (!blanks.length) {
-        setStatus('Nothing else to fill on this page.');
-        return;
-      }
       const buttons = host.shadowRoot.querySelectorAll('button');
       buttons.forEach((b) => { b.disabled = true; });
-      setStatus(`Filling ${blanks.length} field${blanks.length === 1 ? '' : 's'}…`);
-      chrome.runtime.sendMessage({
-        type: 'fill-choices',
-        frameUrl: location.href,
-        title: document.title,
-        pageText: (document.body?.innerText || '').slice(0, 8000),
-        questions: blanks.map(({ kind, label, options }) => ({ kind, label, options })),
-      }, (result) => {
-        buttons.forEach((b) => { b.disabled = false; });
-        updateSummary();
-        if (!result || result.error) {
-          setStatus(result?.error || 'No response. Is the JobTracker server running?', true);
-          return;
+      setStatus('Filling the form…');
+      try {
+        if (!profile) {
+          const result = await new Promise((resolve) => chrome.runtime.sendMessage({ type: 'get-profile' }, resolve));
+          if (!result || result.error) throw new Error(result?.error || 'No response. Is the JobTracker server running?');
+          profile = result.profile;
         }
-        const left = [];
+        const attached = await attachResume();
+        if (attached) await sleep(1500); // some forms read the resume and fill fields from it
+        // A few passes: answering one question can reveal another (race appears after
+        // Hispanic/Latino). Search boxes go last, since an open one blocks typing elsewhere.
         let filled = 0;
-        blanks.forEach((blank, i) => {
-          const value = result.answers[i];
-          if (value && blank.apply(value)) filled++;
-          else left.push(blank);
-        });
-        for (const blank of left) {
+        const tried = new Set();
+        const left = new Map();
+        for (let pass = 0; pass < 3; pass++) {
+          const blanks = findBlanks().filter((b) => !tried.has(`${b.kind}|${b.label}`));
+          if (!blanks.length) break;
+          blanks.sort((a, b) => (a.kind === 'search') - (b.kind === 'search'));
+          for (const blank of blanks) {
+            tried.add(`${blank.kind}|${blank.label}`);
+            const value = answerFor(blank, profile);
+            const done = value && (blank.kind === 'search' ? await fillSearch(blank, value) : blank.apply(value));
+            if (done) filled++;
+            else if (blank.required) left.set(`${blank.kind}|${blank.label}`, blank);
+          }
+          await sleep(500);
+        }
+        for (const blank of left.values()) {
           blank.target.style.outline = '2px solid #f0883e';
           blank.target.style.outlineOffset = '2px';
           blank.target.setAttribute('data-jt-left', '');
         }
-        setStatus(`Filled ${filled} field${filled === 1 ? '' : 's'}.` +
-          (left.length ? ` ${left.length} left for you, outlined in orange.` : ' Check the form, then draft the written answers.'));
-      });
+        setStatus(`${attached ? 'Attached your resume. ' : ''}Filled ${filled} field${filled === 1 ? '' : 's'}.` +
+          (left.size ? ` ${left.size} required left for you, outlined in orange.` : ' Check the form, then draft the written answers.'));
+      } catch (e) {
+        setStatus(String(e.message || e), true);
+      } finally {
+        buttons.forEach((b) => { b.disabled = false; });
+        updateSummary();
+      }
     }
 
     function draft(targets) {
@@ -453,7 +632,7 @@
             <button class="pause" title="Stop opening this panel by itself on job pages (click the toolbar icon to turn it back on)">Pause</button>
             <button class="close" aria-label="Close" title="Hide on this page">✕</button></header>
           <div class="actions">
-            <button class="fill-rest" title="Fill the rest of the form (dropdowns, yes/no questions, checkboxes, short fields) from your standard answers">Fill rest</button>
+            <button class="fill-rest" title="Attach your resume and fill the rest of the form (dropdowns, yes/no questions, checkboxes, short fields) from your standard answers. Free: no AI calls.">Fill rest</button>
             <button class="primary all">Draft all</button>
             <button class="fill-all" title="Put every drafted answer into its form field">Fill all</button>
             <button class="rescan" title="Look for questions again (e.g. after moving to the next page of the form)">Rescan</button>

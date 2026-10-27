@@ -1,3 +1,4 @@
+import base64
 import json
 import re
 from datetime import date
@@ -6,7 +7,7 @@ from typing import Dict, List, Optional
 
 from tracker.config import setup_logging
 from tracker.database import get_job_descriptions, get_tracked_jobs
-from tracker.fit_scorer import load_resume
+from tracker.fit_scorer import find_latest_resume, load_resume
 from tracker.normalizer import normalize_url
 from tracker.salary_estimator import _load_api_key
 
@@ -223,90 +224,25 @@ def draft_answers(urls: List[str], page_title: str, page_text: str, questions: L
     return {"answers": answers, "job": f"{job['company']} - {job['title']}" if job else ""}
 
 
-# Standard answers for the rest of an application (eligibility, logistics, demographics).
-# Personal, so it lives outside the repository.
-PROFILE_FILE = Path.home() / ".config" / "jobtracker" / "application_profile.md"
 
-FILL_STYLE = """You fill in the remaining fields of a job application for the candidate, using <profile> (their standard answers), <resume> and <facts>. For each numbered field, return one value, in order:
-- kind "choice": exactly one of the listed options, copied character for character, or "" if no option fits or you don't know the answer.
-- kind "checkbox": "checked" or "unchecked". Check required acknowledgements, consents, certifications that the application is accurate, and agreements to privacy policies or terms. Leave marketing, SMS and newsletter opt-ins unchecked.
-- kind "text": the exact value to type (a URL, a name, "Immediately", "110000"), or "" if unknown.
-
-Rules:
-- Follow <profile> exactly. Never invent what it doesn't give: phone number, GPA, test scores, references, addresses, specific dates other than "Immediately". Return "" for those so the candidate fills them in.
-- Questions about having worked for, or currently working for, the company: the answer is no unless the company is Applied Materials or Alo. When options describe kinds of past employment and none says "no", return "".
-- "How did you hear about this job": the first of these that is an option: GitHub job board, LinkedIn, Internet, Google; otherwise the closest (an online job board, "Other").
-- Self-identification questions: use the profile's answer; if no option matches it, choose the decline / prefer-not-to-say option.
-- Education questions: the candidate has already graduated (Master's completed 2026).
-- When a field is about salary, use the profile: "Competitive" for free text, 110000 for a number."""
+# Standard answers for the rest of an application (contact details, eligibility,
+# logistics, demographics) that the panel's "Fill rest" matches to form fields itself,
+# without any API calls. Personal, so it lives outside the repository.
+PROFILE_FILE = Path.home() / ".config" / "jobtracker" / "application_profile.json"
 
 
-def fill_choices(urls: List[str], page_title: str, page_text: str, questions: List[Dict]) -> Dict:
-    """
-    questions: [{"kind": "choice"|"checkbox"|"text", "label", "options": [...]}].
-    Returns {"answers": [str, ...]} ("" = leave for the candidate) or {"error": "..."}.
-    """
-    resume, _, _ = load_resume()
-    key = _load_api_key()
-    if not resume:
+def load_profile() -> Dict:
+    try:
+        return {"profile": json.loads(PROFILE_FILE.read_text())}
+    except (OSError, json.JSONDecodeError) as e:
+        return {"error": f"Couldn't read {PROFILE_FILE}: {e}"}
+
+
+def resume_for_upload() -> Dict:
+    """The newest resume, base64-encoded for the extension to attach to an application."""
+    path = find_latest_resume()
+    if not path:
         return {"error": "No resume found (looked for NwachukwuOfomaResume in Downloads, Documents and Desktop)."}
-    if not key:
-        return {"error": "No Anthropic API key set up."}
-    if not questions:
-        return {"answers": []}
-    try:
-        profile = PROFILE_FILE.read_text().strip()
-    except OSError:
-        return {"error": f"No standard-answers profile at {PROFILE_FILE}."}
-    import anthropic
-
-    job = _find_job(urls)
-    about_job = f"Company: {job['company']}\nRole: {job['title']}" if job else f"Page title: {page_title or 'unknown'}"
-    lines = []
-    for i, q in enumerate(questions, 1):
-        lines.append(f"Field {i} ({q.get('kind', 'choice')}): {q.get('label', '')}")
-        if q.get("options"):
-            lines.append("Options: " + " | ".join(q["options"]))
-    user = f"<job>\n{about_job}\n</job>\n\n" + "\n".join(lines)
-    system = [
-        {"type": "text", "text": FILL_STYLE},
-        {"type": "text", "text": f"<profile>\n{profile}\n</profile>\n\n<resume>\n{resume}\n</resume>\n\n<facts>\n{_load_facts()}\n</facts>",
-         "cache_control": {"type": "ephemeral"}},
-    ]
-    schema = {
-        "type": "object",
-        "properties": {"answers": {"type": "array", "items": {"type": "string"}}},
-        "required": ["answers"],
-        "additionalProperties": False,
-    }
-    client = anthropic.Anthropic(api_key=key, max_retries=3)
-    try:
-        response = client.beta.messages.create(
-            model=MODEL,
-            max_tokens=8000,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            output_config={"effort": "low", "format": {"type": "json_schema", "schema": schema}},
-            system=system,
-            messages=[{"role": "user", "content": user}],
-        )
-    except anthropic.APIStatusError as e:
-        logger.warning(f"Form filling failed: {e}")
-        return {"error": f"Claude API error ({e.status_code})."}
-    except anthropic.APIConnectionError:
-        return {"error": "Couldn't reach the Claude API."}
-    if response.stop_reason == "refusal":
-        return {"error": "Claude declined to fill these fields."}
-    text = next((b.text for b in response.content if b.type == "text"), "")
-    try:
-        answers = json.loads(text)["answers"]
-    except (json.JSONDecodeError, KeyError):
-        return {"error": "Got an unreadable reply; try again."}
-    answers = (answers + [""] * len(questions))[:len(questions)]
-    # A choice must be one of the field's own options; anything else is left blank
-    for i, q in enumerate(questions):
-        allowed = q.get("options") or []
-        if q.get("kind") in ("choice", "checkbox") and answers[i] not in allowed:
-            match = next((o for o in allowed if o.strip().lower() == str(answers[i]).strip().lower()), "")
-            answers[i] = match
-    return {"answers": answers}
+    types = {".pdf": "application/pdf", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+    return {"name": path.name, "type": types.get(path.suffix.lower(), "application/octet-stream"),
+            "data": base64.b64encode(path.read_bytes()).decode()}

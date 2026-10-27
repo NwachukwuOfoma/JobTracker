@@ -28,12 +28,23 @@
       const current = select.props.value;
       const empty = current == null || current === '' || (Array.isArray(current) && !current.length);
       result = { options: options(select).map(optionLabel), empty };
+    } else if (select && action === 'search') {
+      // Searchable dropdowns (a location) load their options from what's typed
+      select.props.onInputChange?.(value, { action: 'input-change', prevInputValue: '' });
+      select.props.onMenuOpen?.();
+      result = true;
     } else if (select && action === 'choose') {
       const option = options(select).find((o) => optionLabel(o) === value);
       if (option) {
         select.selectOption(option);
         result = true;
       }
+    } else if (select && action === 'close') {
+      // An open search menu swallows typing in the form's other fields
+      select.props.onInputChange?.('', { action: 'menu-close', prevInputValue: '' });
+      select.props.onMenuClose?.();
+      select.blurInput?.();
+      result = true;
     }
     document.dispatchEvent(new CustomEvent('jobtracker-select-result', { detail: JSON.stringify({ id, result }) }));
   });
