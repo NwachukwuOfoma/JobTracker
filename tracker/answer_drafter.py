@@ -15,7 +15,10 @@ logger = setup_logging()
 
 # Drafts answers to an application's open-ended questions ("Why us?", "Describe a
 # project...") in the candidate's voice, for the Chrome extension's answer panel.
-MODEL = "claude-opus-5-5"
+# The cheapest model: short first-person answers don't need a bigger one (about
+# 0.1 cents a page instead of ~5 with Opus). Server-side refusal fallbacks aren't
+# offered for Haiku, so a refusal is just reported.
+MODEL = "claude-haiku-5-5"
 # What the candidate has actually done, beyond the resume. Personal, so it lives
 # outside the repository; answers may only use facts from here, the resume or the note.
 FACTS_FILE = Path.home() / ".config" / "jobtracker" / "answer_facts.md"
@@ -138,7 +141,15 @@ def _find_job(urls: List[str]) -> Optional[Dict]:
     return None
 
 
-def draft_answers(urls: List[str], page_title: str, page_text: str, questions: List[Dict]) -> Dict:
+# A question that sets its own length ("in 2-3 sentences", "200 words", "a paragraph")
+LENGTH_ASKED = re.compile(r"\b\d+\s*(?:[-–]|to)?\s*\d*\s*(?:words?|characters?|sentences?|paragraphs?)\b|\bparagraphs?\b|in detail|elaborate", re.I)
+
+
+def _sentences(text: str) -> int:
+    return len(re.findall(r"[.!?](?=\s|$)", text.strip()))
+
+
+def draft_answers(urls: List[str], page_title: str, page_text: str, questions: List[Dict], retry_long: bool = True) -> Dict:
     """
     questions: [{"label", "max_length" (int or None), "note" (optional), "previous" (optional)}].
     Returns {"answers": [str, ...], "job": "Company - Title" or ""} or {"error": "..."}.
@@ -199,11 +210,9 @@ def draft_answers(urls: List[str], page_title: str, page_text: str, questions: L
     }
     client = anthropic.Anthropic(api_key=key, max_retries=3)
     try:
-        response = client.beta.messages.create(
+        response = client.messages.create(
             model=MODEL,
             max_tokens=16000,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
             output_config={"effort": "medium", "format": {"type": "json_schema", "schema": schema}},
             system=system,
             messages=[{"role": "user", "content": user}],
@@ -221,6 +230,18 @@ def draft_answers(urls: List[str], page_title: str, page_text: str, questions: L
     except (json.JSONDecodeError, KeyError):
         return {"error": "Got an unreadable reply; try again."}
     answers = (answers + [""] * len(questions))[:len(questions)]
+    # Haiku sometimes runs past the three-sentence cap; shorten those once
+    if retry_long:
+        long = [i for i, (q, a) in enumerate(zip(questions, answers))
+                if _sentences(a) > 3 and not LENGTH_ASKED.search(f"{q['label']} {q.get('note', '')}")]
+        if long:
+            shorter = draft_answers(urls, page_title, page_text, [
+                {**questions[i], "previous": "", "note": f"{questions[i].get('note', '')} Rewrite this draft in at most three sentences, keeping its story: {answers[i]}".strip()}
+                for i in long
+            ], retry_long=False).get("answers", [])
+            for i, answer in zip(long, shorter):
+                if answer and _sentences(answer) < _sentences(answers[i]):
+                    answers[i] = answer
     return {"answers": answers, "job": f"{job['company']} - {job['title']}" if job else ""}
 
 
