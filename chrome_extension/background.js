@@ -7,6 +7,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'open-and-arrange') work = openJobs(sender.tab, message.jobs || []);
   else if (message?.type === 'tab-count') work = countTabs(sender.tab);
   else if (message?.type === 'draft-answers') work = draftAnswers(sender.tab, message);
+  else if (message?.type === 'panel-closed') work = setPanelTab(sender.tab.id, false);
   else return;
   work.then(sendResponse, (e) => sendResponse({ error: String(e) }));
   return true; // respond asynchronously
@@ -103,21 +104,41 @@ chrome.tabs.onCreated.addListener(refreshCounts);
 chrome.tabs.onRemoved.addListener(refreshCounts);
 chrome.tabs.onUpdated.addListener((id, change) => { if (change.url) refreshCounts(); });
 
-// Toolbar icon: look for open-ended questions in every frame of the page (forms
-// are often embedded), then open the answer panel in the frame that has them
-chrome.action.onClicked.addListener(async (tab) => {
+// Looks for open-ended questions in every frame of the page (forms are often
+// embedded), then opens the answer panel in the frame that has them
+async function showPanel(tabId) {
   let results = [];
   try {
-    results = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['answer_panel.js'] });
+    results = await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['answer_panel.js'] });
   } catch (e) {
     return; // a page extensions can't touch, like chrome:// pages or the Web Store
   }
   const best = results.reduce((a, b) => ((b.result || 0) > (a.result || 0) ? b : a), { frameId: 0, result: 0 });
   await chrome.scripting.executeScript({
-    target: { tabId: tab.id, frameIds: [best.frameId] },
+    target: { tabId, frameIds: [best.frameId] },
     func: () => window.__jobtrackerAnswers.open(),
   });
+}
+
+// Tabs with the panel open: it comes back on each new page in that tab until you close it
+async function panelTabs() {
+  return (await chrome.storage.session.get('panelTabs')).panelTabs || {};
+}
+async function setPanelTab(tabId, open) {
+  const tabs = await panelTabs();
+  if (open) tabs[tabId] = true;
+  else delete tabs[tabId];
+  await chrome.storage.session.set({ panelTabs: tabs });
+}
+
+chrome.action.onClicked.addListener(async (tab) => {
+  await setPanelTab(tab.id, true);
+  await showPanel(tab.id);
 });
+chrome.tabs.onUpdated.addListener(async (tabId, change) => {
+  if (change.status === 'complete' && (await panelTabs())[tabId]) showPanel(tabId);
+});
+chrome.tabs.onRemoved.addListener((tabId) => { setPanelTab(tabId, false); });
 
 // The answer panel's drafts come from the JobTracker server (it holds the resume and API key)
 async function draftAnswers(tab, message) {

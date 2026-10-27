@@ -252,18 +252,41 @@
           updateCount(item);
         }
       });
-      root.querySelector('.close').addEventListener('click', () => { host.remove(); host = null; });
+      root.querySelector('.close').addEventListener('click', () => {
+        close();
+        chrome.runtime.sendMessage({ type: 'panel-closed' });
+      });
+      // Forms that move to their next step without a page load (like Workday) get rescanned
+      if (!observer) {
+        observer = new MutationObserver(() => {
+          clearTimeout(watchTimer);
+          watchTimer = setTimeout(() => { if (host && questionsChanged()) render(); }, 800);
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
       root.querySelector('.rescan').addEventListener('click', render);
       const all = root.querySelector('.all');
       all.disabled = !items.length;
       all.addEventListener('click', () => draft(items));
     }
 
+    let observer = null;
+    let watchTimer;
+    const questionsChanged = () => {
+      const now = findQuestions();
+      return now.length !== items.length || now.some((q, i) => q.field !== items[i].field);
+    };
+    function close() {
+      observer?.disconnect();
+      observer = null;
+      host?.remove();
+      host = null;
+    }
+
     window.__jobtrackerAnswers = {
       count: () => findQuestions().length,
-      open: render,
-      isOpen: () => !!host,
-      close: () => { host?.remove(); host = null; },
+      // Called on every page load in a tab with the panel open; leaves an up-to-date panel alone
+      open: () => { if (!host || questionsChanged()) render(); },
     };
   }
   return window.__jobtrackerAnswers.count();
