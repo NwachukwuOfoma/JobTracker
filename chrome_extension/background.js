@@ -6,6 +6,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   let work;
   if (message?.type === 'open-and-arrange') work = openJobs(sender.tab, message.jobs || []);
   else if (message?.type === 'tab-count') work = countTabs(sender.tab);
+  else if (message?.type === 'draft-answers') work = draftAnswers(sender.tab, message);
   else return;
   work.then(sendResponse, (e) => sendResponse({ error: String(e) }));
   return true; // respond asynchronously
@@ -101,3 +102,34 @@ function refreshCounts() {
 chrome.tabs.onCreated.addListener(refreshCounts);
 chrome.tabs.onRemoved.addListener(refreshCounts);
 chrome.tabs.onUpdated.addListener((id, change) => { if (change.url) refreshCounts(); });
+
+// Toolbar icon: look for open-ended questions in every frame of the page (forms
+// are often embedded), then open the answer panel in the frame that has them
+chrome.action.onClicked.addListener(async (tab) => {
+  let results = [];
+  try {
+    results = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['answer_panel.js'] });
+  } catch (e) {
+    return; // a page extensions can't touch, like chrome:// pages or the Web Store
+  }
+  const best = results.reduce((a, b) => ((b.result || 0) > (a.result || 0) ? b : a), { frameId: 0, result: 0 });
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id, frameIds: [best.frameId] },
+    func: () => window.__jobtrackerAnswers.open(),
+  });
+});
+
+// The answer panel's drafts come from the JobTracker server (it holds the resume and API key)
+async function draftAnswers(tab, message) {
+  const resp = await fetch('http://localhost:5050/api/draft_answers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      urls: [tab.url, message.frameUrl],
+      title: message.title,
+      page_text: message.pageText,
+      questions: message.questions,
+    }),
+  });
+  return resp.json();
+}

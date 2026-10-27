@@ -11,7 +11,8 @@ dedupes them in SQLite, scores fit and salary with Claude, and serves a dashboar
 - `tracker/job_details.py`: reads a posting's description per ATS (Workday, Greenhouse, Lever, Ashby, iCIMS, Oracle...)
 - `tracker/fit_scorer.py`, `tracker/salary_estimator.py`: Claude API calls
 - `tracker/exporter.py`: builds `new_jobs.html` (the dashboard UI lives here, not in server.py)
-- `chrome_extension/`: opens jobs as tabs and arranges them by fit
+- `tracker/answer_drafter.py`: drafts answers to application questions; personal facts live in `~/.config/jobtracker/answer_facts.md` (never in the repo)
+- `chrome_extension/`: opens jobs as tabs and arranges them by fit; its toolbar icon opens the answer panel (`answer_panel.js`)
 
 ## Hard rules
 - Never use a logged-in LinkedIn session or read Chrome cookies. LinkedIn is guest endpoints only.

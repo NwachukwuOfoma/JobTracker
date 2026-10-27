@@ -1,10 +1,19 @@
 {
   "manifest_version": 3,
   "name": "JobTracker",
-  "version": "1.4",
-  "description": "Follows LinkedIn's Apply button when a job is opened from the JobTracker dashboard, and lines up and counts your open job tabs by resume fit.",
-  "permissions": ["tabs"],
-  "host_permissions": ["http://localhost:5050/*", "http://127.0.0.1:5050/*"],
+  "version": "1.5",
+  "description": "Follows LinkedIn's Apply button when a job is opened from the JobTracker dashboard, lines up and counts your open job tabs by resume fit, and drafts answers to an application's open-ended questions when you click its icon.",
+  "permissions": ["tabs", "scripting", "activeTab"],
+  "host_permissions": [
+    "http://localhost:5050/*", "http://127.0.0.1:5050/*",
+    "https://*.greenhouse.io/*", "https://*.lever.co/*", "https://*.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*", "https://*.icims.com/*", "https://*.smartrecruiters.com/*",
+    "https://*.workable.com/*", "https://*.oraclecloud.com/*", "https://*.jobvite.com/*",
+    "https://*.bamboohr.com/*", "https://*.rippling.com/*"
+  ],
+  "action": {
+    "default_title": "Draft answers to this application's questions"
+  },
   "background": {
     "service_worker": "background.js"
   },

@@ -15,6 +15,7 @@ sys.path.insert(0, str(BASE_DIR))
 from jobs import run_fetch_pipeline
 from tracker.database import get_tracked_jobs, update_jobs_status_bulk, update_job_status
 from tracker.normalizer import normalize_url
+from tracker.answer_drafter import draft_answers
 
 PORT = 5050
 HOST = "127.0.0.1"
@@ -168,6 +169,25 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"scores": scores, "jobs": jobs}).encode("utf-8"))
+            return
+
+        if parsed.path == "/api/draft_answers":
+            # The Chrome extension's answer panel sends an application page's
+            # open-ended questions; we answer with drafts in the candidate's voice
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            try:
+                data = json.loads(body)
+                result = draft_answers(
+                    data.get("urls", []), data.get("title", ""), data.get("page_text", ""), data.get("questions", [])
+                )
+            except Exception as e:
+                result = {"error": str(e)}
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
             return
 
         if parsed.path == "/api/interact":
