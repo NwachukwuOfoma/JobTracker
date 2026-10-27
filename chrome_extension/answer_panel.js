@@ -184,7 +184,8 @@
           <header><b>Application answers</b>
             <button class="rescan" title="Look for questions again (e.g. after moving to the next page of the form)">Rescan</button>
             <button class="primary all">Draft all</button>
-            <button class="close" aria-label="Close">✕</button></header>
+            <button class="pause" title="Stop opening this panel by itself on job pages (click the toolbar icon to turn it back on)">Pause</button>
+            <button class="close" aria-label="Close" title="Hide on this page">✕</button></header>
           <div class="job">${items.length} open-ended question${items.length === 1 ? '' : 's'} on this page</div>
           <div class="list"></div>
           <div class="status">Add a note to steer any answer (e.g. "say it was my Chimagine app"), then Draft all.</div>
@@ -256,14 +257,11 @@
         close();
         chrome.runtime.sendMessage({ type: 'panel-closed' });
       });
-      // Forms that move to their next step without a page load (like Workday) get rescanned
-      if (!observer) {
-        observer = new MutationObserver(() => {
-          clearTimeout(watchTimer);
-          watchTimer = setTimeout(() => { if (host && questionsChanged()) render(); }, 800);
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-      }
+      root.querySelector('.pause').addEventListener('click', () => {
+        close();
+        chrome.runtime.sendMessage({ type: 'auto-open-off' });
+      });
+      startWatching();
       root.querySelector('.rescan').addEventListener('click', render);
       const all = root.querySelector('.all');
       all.disabled = !items.length;
@@ -276,6 +274,18 @@
       const now = findQuestions();
       return now.length !== items.length || now.some((q, i) => q.field !== items[i].field);
     };
+    // Forms that move to their next step without a page load (like Workday) get
+    // rescanned; a page still waiting for its questions opens the panel when they appear
+    function startWatching() {
+      if (observer) return;
+      observer = new MutationObserver(() => {
+        clearTimeout(watchTimer);
+        watchTimer = setTimeout(() => {
+          if (host ? questionsChanged() : findQuestions().length) render();
+        }, 800);
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
     function close() {
       observer?.disconnect();
       observer = null;
@@ -287,6 +297,7 @@
       count: () => findQuestions().length,
       // Called on every page load in a tab with the panel open; leaves an up-to-date panel alone
       open: () => { if (!host || questionsChanged()) render(); },
+      watch: () => { if (!host) startWatching(); },
     };
   }
   return window.__jobtrackerAnswers.count();

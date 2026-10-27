@@ -7,7 +7,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'open-and-arrange') work = openJobs(sender.tab, message.jobs || []);
   else if (message?.type === 'tab-count') work = countTabs(sender.tab);
   else if (message?.type === 'draft-answers') work = draftAnswers(sender.tab, message);
-  else if (message?.type === 'panel-closed') work = setPanelTab(sender.tab.id, false);
+  else if (message?.type === 'panel-closed') work = hidePanel(sender.tab);
+  else if (message?.type === 'auto-open-off') work = setAutoOpen(false);
   else return;
   work.then(sendResponse, (e) => sendResponse({ error: String(e) }));
   return true; // respond asynchronously
@@ -105,8 +106,10 @@ chrome.tabs.onRemoved.addListener(refreshCounts);
 chrome.tabs.onUpdated.addListener((id, change) => { if (change.url) refreshCounts(); });
 
 // Looks for open-ended questions in every frame of the page (forms are often
-// embedded), then opens the answer panel in the frame that has them
-async function showPanel(tabId) {
+// embedded), then opens the answer panel in the frame that has them. Opened
+// automatically, a page with no questions yet (a job description before you
+// press Apply) just watches and opens the panel once questions appear.
+async function showPanel(tabId, auto = false) {
   let results = [];
   try {
     results = await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['answer_panel.js'] });
@@ -114,31 +117,60 @@ async function showPanel(tabId) {
     return; // a page extensions can't touch, like chrome:// pages or the Web Store
   }
   const best = results.reduce((a, b) => ((b.result || 0) > (a.result || 0) ? b : a), { frameId: 0, result: 0 });
+  if (auto && !best.result) {
+    await chrome.scripting.executeScript({ target: { tabId, allFrames: true }, func: () => window.__jobtrackerAnswers.watch() });
+    return;
+  }
   await chrome.scripting.executeScript({
     target: { tabId, frameIds: [best.frameId] },
     func: () => window.__jobtrackerAnswers.open(),
   });
 }
 
-// Tabs with the panel open: it comes back on each new page in that tab until you close it
-async function panelTabs() {
-  return (await chrome.storage.session.get('panelTabs')).panelTabs || {};
+// Clicking the icon turns on auto-open: every job page you open then gets the panel.
+// ✕ hides it on that page only; Pause turns auto-open off until the next click.
+const ATS_HOSTS = /(^|\.)(greenhouse\.io|lever\.co|ashbyhq\.com|myworkdayjobs\.com|icims\.com|smartrecruiters\.com|workable\.com|oraclecloud\.com|jobvite\.com|bamboohr\.com|rippling\.com)$/;
+const pageKey = (url) => { try { const u = new URL(url); return u.host + u.pathname; } catch (e) { return url; } };
+
+async function setAutoOpen(on) {
+  await chrome.storage.local.set({ autoOpen: on });
+  await chrome.action.setBadgeText({ text: on ? 'on' : '' });
 }
-async function setPanelTab(tabId, open) {
-  const tabs = await panelTabs();
-  if (open) tabs[tabId] = true;
-  else delete tabs[tabId];
-  await chrome.storage.session.set({ panelTabs: tabs });
+
+async function isJobPage(url) {
+  if (!url || !url.startsWith('http')) return false;
+  if (ATS_HOSTS.test(new URL(url).hostname)) return true;
+  try {
+    const { jobs } = await api({ url: 'http://localhost:5050/' }, '/api/tab_scores', { urls: [url] });
+    return jobs.includes(url);
+  } catch (e) {
+    return false; // server down: only job-site pages qualify
+  }
+}
+
+async function maybeAutoOpen(tab) {
+  if (!tab || tab.status !== 'complete' || !(await chrome.storage.local.get('autoOpen')).autoOpen) return;
+  const { hidden = {} } = await chrome.storage.session.get('hidden');
+  if (hidden[tab.id] === pageKey(tab.url) || !(await isJobPage(tab.url))) return;
+  showPanel(tab.id, true);
 }
 
 chrome.action.onClicked.addListener(async (tab) => {
-  await setPanelTab(tab.id, true);
+  await setAutoOpen(true);
+  const { hidden = {} } = await chrome.storage.session.get('hidden');
+  delete hidden[tab.id];
+  await chrome.storage.session.set({ hidden });
   await showPanel(tab.id);
 });
-chrome.tabs.onUpdated.addListener(async (tabId, change) => {
-  if (change.status === 'complete' && (await panelTabs())[tabId]) showPanel(tabId);
-});
-chrome.tabs.onRemoved.addListener((tabId) => { setPanelTab(tabId, false); });
+chrome.tabs.onUpdated.addListener((tabId, change, tab) => { if (change.status === 'complete') maybeAutoOpen(tab); });
+chrome.tabs.onActivated.addListener(({ tabId }) => { chrome.tabs.get(tabId).then(maybeAutoOpen, () => {}); });
+chrome.runtime.onStartup.addListener(async () => setAutoOpen(!!(await chrome.storage.local.get('autoOpen')).autoOpen));
+
+async function hidePanel(tab) {
+  const { hidden = {} } = await chrome.storage.session.get('hidden');
+  hidden[tab.id] = pageKey(tab.url);
+  await chrome.storage.session.set({ hidden });
+}
 
 // The answer panel's drafts come from the JobTracker server (it holds the resume and API key)
 async function draftAnswers(tab, message) {
