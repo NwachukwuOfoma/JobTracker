@@ -213,13 +213,21 @@
         }
       }
 
-      const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input:not([type])';
+      const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input[type="date"], input:not([type])';
       for (const field of document.querySelectorAll(textFields)) {
         if (written.has(field) || field.value || field.disabled || field.readOnly || !shown(field)) continue;
         if (field.getAttribute('role') === 'combobox' || field.hasAttribute('aria-autocomplete') || field.getAttribute('aria-hidden') === 'true') continue;
         const label = labelFor(field);
         if (label.length < 3) continue;
-        add({ kind: 'text', label, options: [], target: field, field, apply: (value) => { fill(field, value); return true; } });
+        add({
+          kind: 'text', label, options: [], target: field, field,
+          apply: (value) => {
+            // A date box only takes YYYY-MM-DD; "Immediately" can't go in one
+            if (field.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+            fill(field, value);
+            return true;
+          },
+        });
       }
       return blanks;
     }
@@ -251,6 +259,14 @@
       return '';
     }
 
+    // Age today from a YYYY-MM-DD birthday, so age-range answers stay right every year
+    function ageFrom(birthDate) {
+      const [y, m, d] = (birthDate || '').split('-').map(Number);
+      if (!y) return NaN;
+      const now = new Date();
+      return now.getFullYear() - y - (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d) ? 1 : 0);
+    }
+
     function rules(P) {
       const worksHere = () => (P.past_employers || []).some((e) => new RegExp(`\\b${escapeRe(e)}\\b`, 'i').test(`${document.title} ${location.hostname}`));
       const text = (value) => (b) => (b.kind === 'text' || b.kind === 'search' ? value : '');
@@ -262,7 +278,12 @@
         [/\b(usa|u\.s\.) citizen|citizenship/, (b) => pick(b.options, [/^yes\b/i, /^usa?$|united states|u\.s\./i])],
         [/relocat/, Y],
         [/18 years|at least 18|over 18|age of 18|legal (working )?age/, Y],
-        [/current age|your age|age range|how old/, (b) => rangeOption(b.options, P.age) || pick(b.options, DECLINE)],
+        [/date of birth|birth ?date|birthday|\bdob\b/, (b) => {
+          if (b.kind !== 'text' || !P.birth_date) return '';
+          const [y, m, d] = P.birth_date.split('-');
+          return b.field.type === 'date' ? P.birth_date : `${m}/${d}/${y}`;
+        }],
+        [/current age|your age|age range|how old/, (b) => rangeOption(b.options, ageFrom(P.birth_date)) || pick(b.options, DECLINE)],
         [/clearance/, (b) => (/eligib|able to obtain|willing to (obtain|undergo)|could you obtain/i.test(b.label) ? Y(b)
           : pick(b.options, [/^no\b/i, /none|not currently|do not (currently )?hold|don.?t have/i]))],
         [/background check|drug (test|screen)|screening/, Y],
@@ -274,7 +295,7 @@
         [/how did you (hear|find|learn)|where did you (hear|find|see|learn)|referral source|source of (this )?application|how were you referred/,
           (b) => (b.kind === 'text' ? 'GitHub job board' : pick(b.options, (P.hear_about || []).map((h) => new RegExp(escapeRe(h), 'i'))))],
         [/transgender/, (b) => pick(b.options, DECLINE)],
-        [/sexual orientation/, (b) => pick(b.options, DECLINE)],
+        [/sexual orientation/, (b) => (P.sexual_orientation === 'straight' ? pick(b.options, [/heterosexual|straight/i]) : '') || pick(b.options, DECLINE)],
         [/hispanic|latin[oaxe]/, (b) => (P.hispanic ? Y(b) : pick(b.options, [/^no\b/i, /not hispanic/i]))],
         [/\brace\b|ethnic/, (b) => pick(b.options, [new RegExp(escapeRe(P.race.split(' ')[0]), 'i')]) || pick(b.options, DECLINE)],
         [/gender|\bsex\b/, (b) => pick(b.options, P.gender === 'male' ? [/^(male|man)\b/i] : [/^(female|woman)\b/i]) || pick(b.options, DECLINE)],
