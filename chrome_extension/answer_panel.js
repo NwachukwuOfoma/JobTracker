@@ -67,13 +67,72 @@
     let host = null;
     let items = [];
 
+    // Where the panel sits, its size, and whether it's collapsed: one setting for every
+    // page, so it stays where you put it. Starts at the top right, 400px wide.
+    const LAYOUT_KEY = 'panelLayout';
+    function setUpLayout(panel) {
+      const header = panel.querySelector('header');
+      const place = (layout) => {
+        const width = Math.min(layout.width || 400, innerWidth - 16);
+        const left = Math.max(8, Math.min(layout.left ?? innerWidth - width - 12, innerWidth - width - 8));
+        const top = Math.max(8, Math.min(layout.top ?? 12, innerHeight - 48));
+        // Keep the bottom edge (and its resize corner) on screen
+        const height = Math.max(120, Math.min(layout.height || innerHeight - 24, innerHeight - top - 8));
+        Object.assign(panel.style, { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` });
+        panel.classList.toggle('collapsed', !!layout.collapsed);
+      };
+      let layout = {};
+      let loaded = false;
+      place(layout);
+      chrome.storage.local.get(LAYOUT_KEY).then((saved) => { layout = saved[LAYOUT_KEY] || {}; place(layout); loaded = true; });
+      const store = (changes) => {
+        layout = { ...layout, ...changes };
+        chrome.storage.local.set({ [LAYOUT_KEY]: layout });
+      };
+
+      header.addEventListener('pointerdown', (event) => {
+        if (event.target.closest('button') || event.button !== 0) return;
+        const startX = event.clientX - panel.offsetLeft;
+        const startY = event.clientY - panel.offsetTop;
+        header.setPointerCapture(event.pointerId);
+        const move = (e) => {
+          panel.style.left = `${Math.max(0, Math.min(e.clientX - startX, innerWidth - 60))}px`;
+          panel.style.top = `${Math.max(0, Math.min(e.clientY - startY, innerHeight - 40))}px`;
+        };
+        const up = () => {
+          header.removeEventListener('pointermove', move);
+          store({ left: panel.offsetLeft, top: panel.offsetTop });
+          place(layout);
+        };
+        header.addEventListener('pointermove', move);
+        header.addEventListener('pointerup', up, { once: true });
+      });
+
+      // Resizing (the native corner handle) is saved once it settles
+      let sizeTimer;
+      new ResizeObserver(() => {
+        if (!loaded || panel.classList.contains('collapsed')) return;
+        clearTimeout(sizeTimer);
+        sizeTimer = setTimeout(() => store({ width: panel.offsetWidth, height: panel.offsetHeight }), 300);
+      }).observe(panel);
+
+      panel.querySelector('.collapse').addEventListener('click', () => {
+        store({ collapsed: !layout.collapsed });
+        place(layout);
+      });
+    }
+
     const CSS_TEXT = `
       :host { all: initial; }
-      .panel { position: fixed; top: 12px; right: 12px; bottom: 12px; width: 400px; max-width: calc(100vw - 24px);
+      .panel { position: fixed; box-sizing: border-box; min-width: 280px; min-height: 120px; resize: both; overflow: hidden;
         z-index: 2147483647; display: flex; flex-direction: column; font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: #ffffff; color: #1f2328; border: 1px solid #d0d7de; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
-      header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #d0d7de; }
+      header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #d0d7de; cursor: move; user-select: none; }
       header b { flex: 1; font-size: 14px; }
+      header button { cursor: pointer; }
+      .panel.collapsed { height: auto !important; min-height: 0; resize: none; }
+      .panel.collapsed > :not(header) { display: none; }
+      .panel.collapsed header { border-bottom: none; }
       .actions { display: flex; gap: 6px; padding: 8px 12px; border-bottom: 1px solid #eaeef2; }
       .job { padding: 6px 12px; color: #59636e; font-size: 12px; border-bottom: 1px solid #eaeef2; }
       .list { flex: 1; overflow-y: auto; padding: 8px 12px 16px; }
@@ -222,7 +281,8 @@
       const root = host.shadowRoot;
       root.innerHTML = `<style>${CSS_TEXT}</style>
         <div class="panel" role="dialog" aria-label="JobTracker answers">
-          <header><b>Application answers</b>
+          <header title="Drag to move; resize from the bottom-right corner"><b>Application answers</b>
+            <button class="collapse" aria-label="Collapse" title="Collapse to this bar (click again to expand)">–</button>
             <button class="pause" title="Stop opening this panel by itself on job pages (click the toolbar icon to turn it back on)">Pause</button>
             <button class="close" aria-label="Close" title="Hide on this page">✕</button></header>
           <div class="actions">
@@ -315,6 +375,7 @@
         items.filter((item) => item.hidden).forEach((item) => setHidden(item, false));
       });
       updateSummary();
+      setUpLayout(root.querySelector('.panel'));
       root.querySelector('.close').addEventListener('click', () => {
         close();
         chrome.runtime.sendMessage({ type: 'panel-closed' });
