@@ -6,6 +6,8 @@
     // Fields that are form data, not questions to write an answer for
     const SKIP = /\b(first|last|middle|full|legal|preferred)?\s*name\b|e-?mail|phone|mobile|linked\s?in|github|twitter|website|portfolio|\burl\b|address|city|state|zip|postal|country|location|salary|compensation|pronoun|school|university|degree|major|gpa|graduation|date|referr|how did you hear|resume|\bcv\b|cover letter|signature|initials/i;
     const OPEN_ENDED = /\?|\b(why|describe|explain|tell us|share|what|how|which|briefly|walk us)\b/i;
+    // Short questions that want a number ("How many years of experience do you have?")
+    const NUMERIC = /^(how many|number of)\b|\byears of (\S+ )?(work |professional |industry )?experience do you have\b/i;
 
     const clean = (text) => (text || '').replace(/[*✱]/g, '').replace(/\s+/g, ' ').trim().slice(0, 700);
 
@@ -44,6 +46,7 @@
         // Contact fields have short labels; a long question that mentions GitHub or a link still counts
         const isQuestion = label.length >= 50 && OPEN_ENDED.test(label);
         if (SKIP.test(label) && !isQuestion) continue;
+        if (label.length < 120 && NUMERIC.test(label)) continue;
         // Short text boxes count only when they're clearly asking something
         if (field.tagName !== 'TEXTAREA' && !(label.length >= 30 && OPEN_ENDED.test(label))) continue;
         if (found.some((q) => q.field === field)) continue;
@@ -75,7 +78,11 @@
       .job { padding: 6px 12px; color: #59636e; font-size: 12px; border-bottom: 1px solid #eaeef2; }
       .list { flex: 1; overflow-y: auto; padding: 8px 12px 16px; }
       .q { border: 1px solid #d0d7de; border-radius: 8px; padding: 10px; margin-top: 10px; }
-      .label { font-weight: 600; cursor: pointer; }
+      .qhead { display: flex; align-items: flex-start; gap: 6px; }
+      .label { flex: 1; font-weight: 600; cursor: pointer; }
+      button.skip { padding: 0 6px; line-height: 20px; border: none; background: none; color: #59636e; }
+      button.skip:hover { color: #cf222e; background: none; }
+      button.link { padding: 0 0 0 6px; border: none; background: none; color: #0969da; text-decoration: underline; font-size: 12px; }
       .label:hover { text-decoration: underline; }
       .limit { color: #59636e; font-size: 11px; margin-top: 2px; }
       textarea { box-sizing: border-box; width: 100%; margin-top: 6px; padding: 6px 8px; font: inherit; color: inherit;
@@ -98,6 +105,9 @@
         header, .q { border-color: #30363d; }
         .job, .status { border-color: #21262d; color: #9198a1; }
         .actions { border-color: #21262d; }
+        button.skip, button.link, button.skip:hover { background: none; }
+        button.skip { color: #9198a1; }
+        button.link { color: #4493f8; }
         .limit, .count, .empty { color: #9198a1; }
         textarea, button { background: #21262d; border-color: #30363d; }
         textarea.answer { background: #0d1117; }
@@ -130,7 +140,7 @@
         for (const item of items) {
           const note = item.note.value;
           const answer = item.answer.value;
-          if (note || answer) saved[keyFor(item)] = { note, answer, t: Date.now() };
+          if (note || answer || item.hidden) saved[keyFor(item)] = { note, answer, hidden: item.hidden, t: Date.now() };
           else delete saved[keyFor(item)];
         }
         await chrome.storage.local.set({ [SAVE_KEY]: saved });
@@ -145,6 +155,25 @@
         type: 'save-answer', frameUrl: location.href,
         question: item.label, note: item.note.value.trim(), answer: item.answer.value,
       });
+    }
+
+    // A skipped question is left out of Draft all and Fill all, and stays skipped on this page
+    function setHidden(item, hidden, persist = true) {
+      item.hidden = hidden;
+      item.box.style.display = hidden ? 'none' : '';
+      updateSummary();
+      if (persist) save();
+    }
+
+    function updateSummary() {
+      const root = host.shadowRoot;
+      const shown = items.filter((item) => !item.hidden).length;
+      const skipped = items.length - shown;
+      root.querySelector('.summary').textContent =
+        `${shown} open-ended question${shown === 1 ? '' : 's'} on this page` + (skipped ? ` · ${skipped} skipped` : '');
+      root.querySelector('.show-hidden').style.display = skipped ? '' : 'none';
+      root.querySelector('.all').disabled = !shown;
+      root.querySelector('.fill-all').disabled = !shown;
     }
 
     function draft(targets) {
@@ -175,15 +204,15 @@
           updateCount(item);
         });
         save();
-        if (result.job) host.shadowRoot.querySelector('.job').textContent = `Matched job: ${result.job}`;
+        if (result.job) host.shadowRoot.querySelector('.matched').textContent = ` · ${result.job}`;
         setStatus('Review each answer and fix any detail that isn\'t right, then Copy or Fill.');
       });
     }
 
     function render() {
       // What's typed in the panel right now carries over a Rescan, even before it's saved
-      const typed = new Map(items.map((item) => [item.label, { note: item.note.value, answer: item.answer.value }]));
-      items = findQuestions().map((q) => ({ ...q, redo: false }));
+      const typed = new Map(items.map((item) => [item.label, { note: item.note.value, answer: item.answer.value, hidden: item.hidden }]));
+      items = findQuestions().map((q) => ({ ...q, redo: false, hidden: false }));
       if (!host) {
         host = document.createElement('div');
         host.id = 'jobtracker-answers';
@@ -201,7 +230,7 @@
             <button class="fill-all" title="Put every drafted answer into its form field">Fill all</button>
             <button class="rescan" title="Look for questions again (e.g. after moving to the next page of the form)">Rescan</button>
           </div>
-          <div class="job">${items.length} open-ended question${items.length === 1 ? '' : 's'} on this page</div>
+          <div class="job"><span class="summary"></span><button class="link show-hidden">show</button><span class="matched"></span></div>
           <div class="list"></div>
           <div class="status">Add a note to steer any answer (e.g. "say it was my Chimagine app"), then Draft all.</div>
         </div>`;
@@ -217,7 +246,17 @@
         label.textContent = item.label;
         label.title = 'Scroll to this question';
         label.addEventListener('click', () => item.field.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-        box.appendChild(label);
+        const skip = document.createElement('button');
+        skip.className = 'skip';
+        skip.textContent = '✕';
+        skip.title = "Skip this question (Draft all and Fill all leave it out)";
+        skip.setAttribute('aria-label', 'Skip this question');
+        skip.addEventListener('click', () => setHidden(item, true));
+        const head = document.createElement('div');
+        head.className = 'qhead';
+        head.append(label, skip);
+        box.appendChild(head);
+        item.box = box;
         if (item.maxLength) {
           const limit = document.createElement('div');
           limit.className = 'limit';
@@ -264,12 +303,18 @@
       chrome.storage.local.get(SAVE_KEY).then(({ [SAVE_KEY]: saved = {} }) => {
         for (const item of items) {
           const previous = typed.get(item.label) || saved[keyFor(item)];
-          if (!previous || item.note.value || item.answer.value) continue;
+          if (!previous) continue;
+          if (previous.hidden) setHidden(item, true, false);
+          if (item.note.value || item.answer.value) continue;
           item.note.value = previous.note || '';
           item.answer.value = previous.answer || '';
           updateCount(item);
         }
       });
+      root.querySelector('.show-hidden').addEventListener('click', () => {
+        items.filter((item) => item.hidden).forEach((item) => setHidden(item, false));
+      });
+      updateSummary();
       root.querySelector('.close').addEventListener('click', () => {
         close();
         chrome.runtime.sendMessage({ type: 'panel-closed' });
@@ -281,12 +326,10 @@
       startWatching();
       root.querySelector('.rescan').addEventListener('click', render);
       const all = root.querySelector('.all');
-      all.disabled = !items.length;
-      all.addEventListener('click', () => draft(items));
+      all.addEventListener('click', () => draft(items.filter((item) => !item.hidden)));
       const fillAll = root.querySelector('.fill-all');
-      fillAll.disabled = !items.length;
       fillAll.addEventListener('click', () => {
-        const ready = items.filter((item) => item.answer.value.trim());
+        const ready = items.filter((item) => !item.hidden && item.answer.value.trim());
         ready.forEach((item) => { fill(item.field, item.answer.value); remember(item); });
         setStatus(ready.length ? `Filled ${ready.length} answer${ready.length === 1 ? '' : 's'} into the form.` : 'Nothing to fill yet; draft the answers first.');
       });
