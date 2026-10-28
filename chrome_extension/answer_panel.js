@@ -661,6 +661,52 @@
         button:hover { background: #30363d; }
       }`;
 
+    // After a resume upload, sites like SmartRecruiters read it and fill fields
+    // themselves, seconds later, which can overwrite Fill rest's answers. This waits up
+    // to `limit` ms for the form to change, then for it to settle; true if it changed.
+    const formSnapshot = () => deepAll(FIELDS).map((f) => (f.type === 'checkbox' || f.type === 'radio' ? f.checked : f.value)).join('\u0001') +
+      deepAll('[role="combobox"], [aria-haspopup="listbox"]').map((el) => deepText(el).trim()).join('\u0001');
+    async function formChangedBySite(limit) {
+      const before = formSnapshot();
+      const start = Date.now();
+      while (Date.now() - start < limit) {
+        await sleep(500);
+        if (formSnapshot() === before) continue;
+        let last = formSnapshot();
+        for (let stable = 0; stable < 4 && Date.now() - start < limit + 10000; ) {
+          await sleep(500);
+          const now = formSnapshot();
+          stable = now === last ? stable + 1 : 0;
+          last = now;
+        }
+        return true;
+      }
+      return false;
+    }
+
+    // A plain-text sketch of a piece of the page (tags, roles, labels, text), shadow
+    // roots included, so a field Fill rest gets wrong can be diagnosed from a paste
+    function outline(node, depth = 0) {
+      if (!node || depth > 7) return '';
+      const attrs = ['id', 'role', 'type', 'name', 'aria-haspopup', 'aria-expanded', 'aria-label', 'placeholder', 'value']
+        .map((a) => node.getAttribute?.(a) ? `${a}="${node.getAttribute(a).slice(0, 40)}"` : '').filter(Boolean).join(' ');
+      const text = [...(node.childNodes || [])].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent.trim()).join(' ').slice(0, 50);
+      const kids = node.shadowRoot ? [...node.shadowRoot.children] : [...(node.children || [])];
+      return `${'  '.repeat(depth)}<${node.localName}${attrs ? ` ${attrs}` : ''}${node.shadowRoot ? ' #shadow' : ''}>${text ? ` ${text}` : ''}\n` +
+        kids.filter((k) => !/^(script|style|svg|path)$/.test(k.localName)).slice(0, 15).map((k) => outline(k, depth + 1)).join('');
+    }
+
+    let report = '';
+    function setReport(lines) {
+      // The phone box's surroundings: the part of these forms most likely to differ
+      const phones = deepAll('input[type="tel"]').map((tel) => {
+        let box = up(tel);
+        for (let i = 0; box && i < 2 && fieldsIn(box).length <= 3; i++) box = up(box);
+        return `--- around the phone box ---\n${outline(box)}`;
+      });
+      report = [`JobTracker Fill rest report: ${location.host}${location.pathname}`, ...lines, ...phones].join('\n');
+    }
+
     function setStatus(text, isError) {
       const status = host.shadowRoot.querySelector('.status');
       status.textContent = text;
@@ -723,6 +769,46 @@
       root.querySelector('.fill-all').disabled = !shown;
     }
 
+    // One round of filling: a few passes over the blanks (answering one question can
+    // reveal another, like race after Hispanic/Latino), then education-date corrections
+    async function fillPasses() {
+      // Search boxes and custom dropdowns go last, since an open one blocks typing elsewhere
+      let filled = 0;
+      const tried = new Set();
+      const left = new Map();
+      const lines = [];
+      for (let pass = 0; pass < 3; pass++) {
+        const blanks = findBlanks().filter((b) => !tried.has(`${b.kind}|${b.label}`));
+        if (!blanks.length) break;
+        const late = (b) => (b.kind === 'search' || b.kind === 'dropdown' ? 1 : 0);
+        blanks.sort((a, b) => late(a) - late(b));
+        for (const blank of blanks) {
+          tried.add(`${blank.kind}|${blank.label}`);
+          const value = answerFor(blank, profile);
+          const done = value && (blank.kind === 'search' ? await fillSearch(blank, value)
+            : blank.kind === 'dropdown' ? await fillDropdown(blank, value) : blank.apply(value));
+          if (done) filled++;
+          else if (blank.required) left.set(`${blank.kind}|${blank.label}`, blank);
+          lines.push(`${done ? 'filled' : 'left  '} [${blank.kind}${blank.required ? ', required' : ''}] ${blank.label.slice(0, 80)} => ${JSON.stringify(value || '')}`);
+        }
+        await sleep(500);
+      }
+      // Education dates someone else filled (Simplify reads them off the resume, often
+      // a month off) are corrected to the profile's
+      for (const field of deepAll('input[type="text"], input[type="month"], input[type="date"], input:not([type])')) {
+        if (!field.value || !shown(field)) continue;
+        const blank = { kind: 'text', label: labelFor(field), options: [], target: field, field };
+        if (!/\b(from|to|start|end|begin|until|finish|graduat\w*|completion)\b/i.test(blank.label)) continue;
+        const expected = educationDate(blank, profile);
+        if (expected && field.value !== expected && !(field.type === 'month' && !/^\d{4}-\d{2}$/.test(expected))) {
+          lines.push(`fixed  [education date] ${blank.label} ${JSON.stringify(field.value)} => ${JSON.stringify(expected)}`);
+          fill(field, expected);
+          filled++;
+        }
+      }
+      return { filled, left, lines };
+    }
+
     async function fillRest() {
       for (const el of deepAll('[data-jt-left]')) {
         el.style.outline = '';
@@ -738,38 +824,22 @@
           profile = result.profile;
         }
         const resume = await attachResume();
-        if (resume === 'attached') await sleep(1500); // some forms read the resume and fill fields from it
-        // A few passes: answering one question can reveal another (race appears after
-        // Hispanic/Latino). Search boxes go last, since an open one blocks typing elsewhere.
-        let filled = 0;
-        const tried = new Set();
-        const left = new Map();
-        for (let pass = 0; pass < 3; pass++) {
-          const blanks = findBlanks().filter((b) => !tried.has(`${b.kind}|${b.label}`));
-          if (!blanks.length) break;
-          const late = (b) => (b.kind === 'search' || b.kind === 'dropdown' ? 1 : 0);
-          blanks.sort((a, b) => late(a) - late(b));
-          for (const blank of blanks) {
-            tried.add(`${blank.kind}|${blank.label}`);
-            const value = answerFor(blank, profile);
-            const done = value && (blank.kind === 'search' ? await fillSearch(blank, value)
-              : blank.kind === 'dropdown' ? await fillDropdown(blank, value) : blank.apply(value));
-            if (done) filled++;
-            else if (blank.required) left.set(`${blank.kind}|${blank.label}`, blank);
-          }
-          await sleep(500);
+        // Sites that read the resume (Ashby, SmartRecruiters) rebuild or rewrite fields,
+        // at once or seconds later. So: let the first wave settle, fill, watch for a later
+        // rewrite, then always make one last pass (it only touches blank or wrong fields).
+        if (resume === 'attached') {
+          setStatus('Attached your resume; letting the site read it…');
+          await sleep(1500);
+          await formChangedBySite(1000);
         }
-        // Education dates someone else filled (Simplify reads them off the resume, often
-        // a month off) are corrected to the profile's
-        for (const field of deepAll('input[type="text"], input[type="month"], input[type="date"], input:not([type])')) {
-          if (!field.value || !shown(field)) continue;
-          const blank = { kind: 'text', label: labelFor(field), options: [], target: field, field };
-          if (!/\b(from|to|start|end|begin|until|finish|graduat\w*|completion)\b/i.test(blank.label)) continue;
-          const expected = educationDate(blank, profile);
-          if (expected && field.value !== expected && !(field.type === 'month' && !/^\d{4}-\d{2}$/.test(expected))) {
-            fill(field, expected);
-            filled++;
-          }
+        let { filled, left, lines } = await fillPasses();
+        if (resume === 'attached') {
+          setStatus(`Filled ${filled} field${filled === 1 ? '' : 's'}; checking whether the site rewrites them from your resume…`);
+          if (await formChangedBySite(10000)) lines.push('site changed the form after the resume upload');
+          const again = await fillPasses();
+          if (again.filled) lines.push(`last pass filled or fixed ${again.filled} more:`, ...again.lines.filter((l) => !l.startsWith('left')));
+          filled += again.filled;
+          left = again.left;
         }
         for (const blank of left.values()) {
           blank.target.style.outline = '2px solid #f0883e';
@@ -779,6 +849,17 @@
         const resumeNote = { attached: 'Attached your resume. ', already: 'Resume already attached. ', none: 'No resume upload found on this page. ' }[resume];
         setStatus(`${resumeNote}Filled ${filled} field${filled === 1 ? '' : 's'}.` +
           (left.size ? ` ${left.size} required left for you, outlined in orange.` : ' Check the form, then draft the written answers.'));
+        setReport([`resume: ${resume}`, ...lines]);
+        // If something came out wrong, this report shows what Fill rest saw and did
+        const copy = document.createElement('button');
+        copy.className = 'link';
+        copy.textContent = 'Copy report';
+        copy.title = 'Copy what Fill rest found and did on this page, to paste when something is wrong';
+        copy.addEventListener('click', async () => {
+          await navigator.clipboard.writeText(report);
+          copy.textContent = 'Copied';
+        });
+        host.shadowRoot.querySelector('.status').appendChild(copy);
       } catch (e) {
         setStatus(String(e.message || e), true);
       } finally {
