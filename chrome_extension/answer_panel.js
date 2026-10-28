@@ -954,7 +954,19 @@
         host = document.createElement('div');
         host.id = 'jobtracker-answers';
         host.attachShadow({ mode: 'open' });
+        host.setAttribute('popover', 'manual');
+        host.style.cssText = 'position:fixed;inset:0 auto auto 0;width:0;height:0;margin:0;padding:0;border:0;overflow:visible;background:transparent';
         document.documentElement.appendChild(host);
+        lift();
+        let queued = false;
+        modalObserver = new MutationObserver(() => {
+          if (queued) return;
+          queued = true;
+          requestAnimationFrame(() => { queued = false; lift(); });
+        });
+        modalObserver.observe(document.documentElement, {
+          childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'aria-modal', 'style', 'class', 'hidden'],
+        });
       }
       const root = host.shadowRoot;
       root.innerHTML = `<style>${CSS_TEXT}</style>
@@ -1099,9 +1111,33 @@
       });
       observer.observe(document.body, { childList: true, subtree: true });
     }
+    // A site's modal (LinkedIn's Easy Apply) sits in the browser's top layer, above any
+    // z-index, and makes the rest of the page unclickable. So the panel is a popover,
+    // which is in the top layer too, and moves inside whichever modal is open
+    let modalObserver = null;
+    let modalOnTop = null;
+    function lift() {
+      if (!host) return;
+      const modals = [...document.querySelectorAll('dialog, [aria-modal="true"]')]
+        .filter((el) => !host.contains(el) && (el.matches('dialog') ? el.matches(':modal') : el.getClientRects().length));
+      const modal = modals.at(-1) || null;
+      const parent = modal || document.documentElement;
+      if (host.parentNode !== parent) parent.appendChild(host); // (moving it closes the popover)
+      try {
+        if (modal !== modalOnTop && host.matches(':popover-open')) host.hidePopover(); // re-open above the new modal
+        if (!host.matches(':popover-open')) host.showPopover();
+      } catch (e) {
+        // No popover support: the panel's z-index still covers most pages
+      }
+      modalOnTop = modal;
+    }
+
     function close() {
       observer?.disconnect();
       observer = null;
+      modalObserver?.disconnect();
+      modalObserver = null;
+      modalOnTop = null;
       host?.remove();
       host = null;
     }
