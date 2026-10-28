@@ -87,7 +87,8 @@
         if (field.getAttribute('role') === 'combobox' || field.hasAttribute('aria-autocomplete') ||
             field.getAttribute('aria-hidden') === 'true' || field.hasAttribute('list')) continue;
         const label = labelFor(field);
-        if (!label || label.length < 8) continue;
+        // A multi-line box is a written answer even under a one-word label ("Summary" on LinkedIn)
+        if (!label || label.length < (field.tagName === 'TEXTAREA' ? 3 : 8)) continue;
         // Contact fields have short labels; a long question that mentions GitHub or a link still counts
         const isQuestion = label.length >= 50 && OPEN_ENDED.test(label);
         if (SKIP.test(label) && !isQuestion) continue;
@@ -607,23 +608,26 @@
         if (alive()) chrome.storage.local.set({ [LAYOUT_KEY]: layout });
       };
 
-      header.addEventListener('pointerdown', (event) => {
-        if (event.target.closest('button') || event.button !== 0) return;
-        const startX = event.clientX - panel.offsetLeft;
-        const startY = event.clientY - panel.offsetTop;
-        header.setPointerCapture(event.pointerId);
-        const move = (e) => {
-          panel.style.left = `${Math.max(0, Math.min(e.clientX - startX, innerWidth - 60))}px`;
-          panel.style.top = `${Math.max(0, Math.min(e.clientY - startY, innerHeight - 40))}px`;
-        };
-        const up = () => {
-          header.removeEventListener('pointermove', move);
+      // Pointer events reach the panel through shield() (below), which keeps them from the site
+      let drag = null;
+      dragHandlers = {
+        pointerdown(event) {
+          const path = event.composedPath();
+          if (!path.includes(header) || path.some((el) => el.tagName === 'BUTTON') || event.button !== 0) return;
+          drag = { x: event.clientX - panel.offsetLeft, y: event.clientY - panel.offsetTop };
+        },
+        pointermove(e) {
+          if (!drag) return;
+          panel.style.left = `${Math.max(0, Math.min(e.clientX - drag.x, innerWidth - 60))}px`;
+          panel.style.top = `${Math.max(0, Math.min(e.clientY - drag.y, innerHeight - 40))}px`;
+        },
+        pointerup() {
+          if (!drag) return;
+          drag = null;
           store({ left: panel.offsetLeft, top: panel.offsetTop });
           place(layout);
-        };
-        header.addEventListener('pointermove', move);
-        header.addEventListener('pointerup', up, { once: true });
-      });
+        },
+      };
 
       // Resizing (the native corner handle) is saved once it settles
       let sizeTimer;
@@ -957,6 +961,7 @@
         host.setAttribute('popover', 'manual');
         host.style.cssText = 'position:fixed;inset:0 auto auto 0;width:0;height:0;margin:0;padding:0;border:0;overflow:visible;background:transparent';
         document.documentElement.appendChild(host);
+        shieldTypes.forEach((type) => window.addEventListener(type, shield, true));
         lift();
         let queued = false;
         modalObserver = new MutationObserver(() => {
@@ -1116,6 +1121,22 @@
     // which is in the top layer too, and moves inside whichever modal is open
     let modalObserver = null;
     let modalOnTop = null;
+
+    // A site's modal closes on a click outside it, traps focus and has keyboard
+    // shortcuts, all through listeners on the document. Presses, focus and keys in
+    // the panel stop at the window, so the site never sees them; their default
+    // actions (focusing a box, typing) still happen. The panel's dragging is the one
+    // thing that needs them, so it gets them from here.
+    let dragHandlers = null;
+    const SHIELDED = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'focusin', 'focusout', 'keydown', 'keyup', 'keypress'];
+    function shield(event) {
+      const handler = dragHandlers?.[event.type];
+      if (event.type === 'pointermove' || event.type === 'pointerup') handler?.(event); // a drag can leave the panel
+      if (!host || !event.composedPath().includes(host)) return;
+      event.stopPropagation();
+      if (event.type === 'pointerdown') handler?.(event);
+    }
+    const shieldTypes = [...SHIELDED, 'pointermove'];
     function lift() {
       if (!host) return;
       const modals = [...document.querySelectorAll('dialog, [aria-modal="true"]')]
@@ -1138,6 +1159,7 @@
       modalObserver?.disconnect();
       modalObserver = null;
       modalOnTop = null;
+      shieldTypes.forEach((type) => window.removeEventListener(type, shield, true));
       host?.remove();
       host = null;
     }
