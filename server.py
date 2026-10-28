@@ -5,7 +5,7 @@ import os
 import threading
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, parse_qsl, unquote, urlencode, urlunparse
 import subprocess
 
 # Ensure project root is in sys.path
@@ -29,6 +29,29 @@ last_fetch_info = {
     "total_unvisited": 0,
     "status": "idle"
 }
+
+# Pages a job tab went on to (a LinkedIn job's company site), as tab key -> the job's
+# tab key. Kept in cache/, since these URLs are personal browsing
+PAGE_LINKS_FILE = BASE_DIR / "cache" / "page_links.json"
+page_links_lock = threading.Lock()
+
+
+def _load_page_links():
+    try:
+        return json.loads(PAGE_LINKS_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def _tab_key(url):
+    """normalize_url, made looser for matching open tabs: an apply page carries
+    tracking parameters (Lever's lever-source) and encodes commas (Workday's
+    "Boulder%2C-CO") that the stored link doesn't. Not for dedupe keys."""
+    parsed = urlparse(normalize_url(url))
+    path = unquote(parsed.path).replace(",", "")
+    query = [(k, v) for k, v in parse_qsl(parsed.query) if not k.lower().startswith("lever-") and k not in ("_pc", "src")]
+    return urlunparse(parsed._replace(path=path, query=urlencode(query)))
+
 
 class JobTrackerHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
@@ -151,24 +174,43 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             # (unscored jobs map to None: they still count as job tabs, but can't be ranked)
             by_url = {}
             for job in get_tracked_jobs().values():
-                by_url[job["normalized_url"]] = job.get("fit_score")
-                for link in (job.get("original_url"), job.get("apply_url")):
+                for link in (job["normalized_url"], job.get("original_url"), job.get("apply_url")):
                     if link:
-                        by_url.setdefault(normalize_url(link), job.get("fit_score"))
+                        by_url.setdefault(_tab_key(link), job.get("fit_score"))
+            links = _load_page_links()
             scores = {}
             jobs = []
             for url in urls:
                 if url.startswith("http") and "localhost" not in url and "127.0.0.1" not in url:
-                    norm = normalize_url(url)
-                    if norm in by_url:
+                    key = _tab_key(url)
+                    key = key if key in by_url else links.get(key)
+                    if key in by_url:
                         jobs.append(url)
-                        if by_url[norm] is not None:
-                            scores[url] = by_url[norm]
+                        if by_url[key] is not None:
+                            scores[url] = by_url[key]
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self._send_cors_headers()
             self.end_headers()
             self.wfile.write(json.dumps({"scores": scores, "jobs": jobs}).encode("utf-8"))
+            return
+
+        if parsed.path == "/api/link_page":
+            # A job tab went on to a page JobTracker doesn't know (LinkedIn's Apply leads
+            # to the company's site); from now on that page counts as the same job
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            data = json.loads(body)
+            with page_links_lock:
+                links = _load_page_links()
+                job = _tab_key(data.get("job_url", ""))
+                links[_tab_key(data.get("url", ""))] = links.get(job, job)
+                PAGE_LINKS_FILE.write_text(json.dumps(links, indent=1))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(b"{}")
             return
 
         if parsed.path == "/api/draft_answers":

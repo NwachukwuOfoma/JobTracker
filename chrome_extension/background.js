@@ -106,7 +106,44 @@ function refreshCounts() {
 }
 chrome.tabs.onCreated.addListener(refreshCounts);
 chrome.tabs.onRemoved.addListener(refreshCounts);
-chrome.tabs.onUpdated.addListener((id, change) => { if (change.url) refreshCounts(); });
+
+// A LinkedIn job's Apply leads to the company's site, which JobTracker has never
+// seen. Each tab remembers the job it was on, and every page it goes on to (or a
+// tab it opens) is reported to the server as that job's, so it still counts.
+// Search and LinkedIn pages end that, except LinkedIn's redirect to the company.
+const LEAVES_JOB = /(^|\.)(linkedin\.com|google\.[a-z.]+|youtube\.com)$/;
+async function tabJobs(update) {
+  const { tabJobs: jobs = {} } = await chrome.storage.session.get('tabJobs');
+  if (update) {
+    update(jobs);
+    await chrome.storage.session.set({ tabJobs: jobs });
+  }
+  return jobs;
+}
+async function followJob(tabId, url) {
+  if (!url || !url.startsWith('http')) return;
+  try {
+    const { jobs } = await api({ url: 'http://localhost:5050/' }, '/api/tab_scores', { urls: [url] });
+    const job = (await tabJobs())[tabId];
+    const { hostname, pathname } = new URL(url);
+    if (jobs.includes(url)) {
+      if (job !== url) await tabJobs((all) => { all[tabId] = url; });
+    } else if (LEAVES_JOB.test(hostname)) {
+      if (!pathname.startsWith('/safety/go')) await tabJobs((all) => { delete all[tabId]; });
+    } else if (job) {
+      await api({ url: 'http://localhost:5050/' }, '/api/link_page', { job_url: job, url });
+    }
+  } catch (e) {
+    // Server down: this page just won't count
+  }
+  refreshCounts();
+}
+chrome.tabs.onCreated.addListener(async (tab) => {
+  const job = tab.openerTabId !== undefined && (await tabJobs())[tab.openerTabId];
+  if (job) await tabJobs((all) => { all[tab.id] = job; });
+});
+chrome.tabs.onRemoved.addListener((tabId) => tabJobs((all) => { delete all[tabId]; }));
+chrome.tabs.onUpdated.addListener((tabId, change, tab) => { if (change.url) followJob(tabId, tabUrl(tab)); });
 
 // Looks for open-ended questions in every frame of the page (forms are often
 // embedded), then opens the answer panel in the frame that has them. Opened
