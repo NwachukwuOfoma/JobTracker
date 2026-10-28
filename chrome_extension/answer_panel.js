@@ -67,7 +67,18 @@
       if (clean(field.getAttribute('aria-label'))) return clean(field.getAttribute('aria-label'));
       const wrapping = closestDeep(field, 'label');
       if (wrapping && clean(wrapping.innerText)) return clean(wrapping.innerText);
-      // Otherwise the nearest container with its own text: the question sits just above the box
+      // Otherwise the nearest text just above the box, stopping at the previous field
+      // (Gem: <span>Question</span><div><div><textarea>, with nothing linking the two)
+      for (let node = field, depth = 0; node && depth < 5; depth++, node = up(node)) {
+        let sibling = node.previousElementSibling;
+        for (; sibling; sibling = sibling.previousElementSibling) {
+          if (sibling.querySelector?.('input, textarea, select')) break;
+          const text = clean(sibling.innerText);
+          if (text) return text;
+        }
+        if (sibling) break;
+      }
+      // Or the nearest container with its own text: the question sits just above the box
       let node = up(field);
       for (let depth = 0; node && depth < 5; depth++, node = up(node)) {
         // Components often take their label as an attribute (<spl-input label="Email">)
