@@ -94,6 +94,8 @@
       Object.getOwnPropertyDescriptor(proto, 'value').set.call(field, value);
       field.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
       field.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+      // Some date pickers (SmartRecruiters) only commit typed text when the box loses focus
+      field.dispatchEvent(new Event('blur', { composed: true }));
     }
 
     // ---- Fill rest: the form's other blanks (resume, dropdowns, yes/no questions,
@@ -168,7 +170,11 @@
         if (label && /[*✱]/.test(label.innerText)) return true;
       }
       const box = closestDeep(target, ENTRY) || up(target);
-      return /[*✱]|required/i.test(box ? deepText(box).slice(0, 400) : '');
+      // A form-wide note ("Fields marked with * are required") doesn't make this field required
+      const text = (box ? deepText(box).slice(0, 400) : '')
+        .replace(/(fields?|questions?) (marked|indicated) (with )?(an? )?(asterisk|\*)[^.\n]*/gi, '')
+        .replace(/\*\s*(indicates|denotes|means)[^.\n]*/gi, '');
+      return /[*✱]|required/i.test(text);
     }
 
     function findBlanks() {
@@ -259,6 +265,22 @@
         }
       }
 
+      // Custom (non-<select>) country-code dropdowns beside a phone box, as on SmartRecruiters
+      for (const tel of deepAll('input[type="tel"]')) {
+        if (!shown(tel)) continue;
+        // Only within the phone box's own small group, and never another labeled field
+        // (Ashby's Location search box sits near its phone box)
+        const TRIGGER = '[role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"]';
+        let trigger = null;
+        for (let n = up(tel), i = 0; n && i < 4 && !trigger && fieldsIn(n).length <= 3; n = up(n), i++) {
+          trigger = [...deepAll(TRIGGER, n), ...(n.shadowRoot ? deepAll(TRIGGER, n.shadowRoot) : [])]
+            .find((el) => el !== tel && el.tagName !== 'SELECT' && shown(el) &&
+              (el.tagName !== 'INPUT' || /code|country|dial|phone/i.test(labelFor(el)))) || null;
+        }
+        if (!trigger || US.test(`${deepText(trigger)} ${trigger.value || ''}`)) continue;
+        add({ kind: 'dropdown', label: 'Phone country code', options: [], target: trigger, trigger });
+      }
+
       const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input[type="date"], input[type="month"], input:not([type])';
       for (const field of deepAll(textFields)) {
         if (written.has(field) || field.value || field.disabled || field.readOnly || !shown(field)) continue;
@@ -335,10 +357,10 @@
     // group of fields around it (one entry, not the whole form) has a school field.
     function inEducation(b) {
       if (/school|university|college|degree|education|institution|major|field of study/i.test(b.label)) return true;
-      for (let node = up(b.target), i = 0; node && i < 6; node = up(node), i++) {
+      for (let node = up(b.target), i = 0; node && i < 8; node = up(node), i++) {
         const fields = fieldsIn(node);
-        if (fields.length < 2) continue;
-        return fields.length <= 8 && fields.some((f) => /school|university|college|institution/i.test(labelFor(f)));
+        if (fields.length > 10) return false; // that's the whole form, not one entry
+        if (fields.some((f) => /school|university|college|institution/i.test(labelFor(f)))) return true;
       }
       return false;
     }
@@ -407,6 +429,7 @@
         [/pronoun/, () => ''],
         [/\bgpa\b|grade point/, () => ''],
         [/\b(from|to|start|end|begin|until|finish|graduat\w*|completion|month|year|dates?)\b/, (b) => educationDate(b, P)],
+        [/currently (attend|enrolled|studying|a student)|still (attend|enrolled)/, (b) => (b.kind === 'checkbox' ? 'unchecked' : null)],
         [/enrolled|graduat|currently a student/, (b) => pick(b.options, [/already graduated|^graduated|not (currently )?(enrolled|a student)|alumn/i])],
         [/start date|start working|available to start|earliest|notice period/, (b) => (b.kind === 'text' ? P.start_date
           : pick(b.options, [/immediate|asap|right away|^now/i, /2 weeks|two weeks/i]))],
@@ -424,7 +447,7 @@
         [/linkedin/, text(P.linkedin)],
         [/github/, text(P.github)],
         [/website|portfolio|personal (site|url)/, text(P.website)],
-        [/\bcountry\b|country code|dial(ing)? code|phone (country|code)/, (b) => (b.kind === 'text' || b.kind === 'search' ? P.country
+        [/\bcountry\b|country code|dial(ing)? code|phone (country|code)/, (b) => (b.kind === 'text' || b.kind === 'search' || b.kind === 'dropdown' ? P.country
           : pick(b.options, [/^united states\b/i, /\bunited states\b/i, /^usa?\b|\bu\.s\.a?\b/i, /\(\+1\)|^\+1\b/]))],
         [/\b(state|province)\b/, (b) => (b.kind === 'text' ? P.state : pick(b.options, [new RegExp(`^${escapeRe(P.state)}`, 'i'), /^il$/i]))],
         [/\bcity\b|location|located|where (are you|do you live)|current address|based in/, (b) => (b.kind === 'text' || b.kind === 'search'
@@ -450,6 +473,29 @@
         if (answer !== null) return answer || '';
       }
       return '';
+    }
+
+    // Custom dropdowns: open the menu, then click the matching option
+    async function fillDropdown(blank, value) {
+      const open = (el) => {
+        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
+        el.click();
+      };
+      open(blank.trigger);
+      await sleep(600);
+      const options = deepAll('[role="option"]').filter((o) => o.getClientRects().length);
+      const prefer = [new RegExp(`^${escapeRe(value)}\\b`, 'i'), new RegExp(`\\b${escapeRe(value)}\\b`, 'i')];
+      if (/united states/i.test(value)) prefer.push(/\busa?\b/i);
+      const text = pick(options.map((o) => clean(o.textContent)), prefer);
+      const option = options.find((o) => clean(o.textContent) === text);
+      if (!option) {
+        blank.trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
+        return false;
+      }
+      option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
+      option.click();
+      await sleep(300);
+      return true;
     }
 
     // Location search boxes: type the city, then pick the matching suggestion
@@ -701,15 +747,29 @@
         for (let pass = 0; pass < 3; pass++) {
           const blanks = findBlanks().filter((b) => !tried.has(`${b.kind}|${b.label}`));
           if (!blanks.length) break;
-          blanks.sort((a, b) => (a.kind === 'search') - (b.kind === 'search'));
+          const late = (b) => (b.kind === 'search' || b.kind === 'dropdown' ? 1 : 0);
+          blanks.sort((a, b) => late(a) - late(b));
           for (const blank of blanks) {
             tried.add(`${blank.kind}|${blank.label}`);
             const value = answerFor(blank, profile);
-            const done = value && (blank.kind === 'search' ? await fillSearch(blank, value) : blank.apply(value));
+            const done = value && (blank.kind === 'search' ? await fillSearch(blank, value)
+              : blank.kind === 'dropdown' ? await fillDropdown(blank, value) : blank.apply(value));
             if (done) filled++;
             else if (blank.required) left.set(`${blank.kind}|${blank.label}`, blank);
           }
           await sleep(500);
+        }
+        // Education dates someone else filled (Simplify reads them off the resume, often
+        // a month off) are corrected to the profile's
+        for (const field of deepAll('input[type="text"], input[type="month"], input[type="date"], input:not([type])')) {
+          if (!field.value || !shown(field)) continue;
+          const blank = { kind: 'text', label: labelFor(field), options: [], target: field, field };
+          if (!/\b(from|to|start|end|begin|until|finish|graduat\w*|completion)\b/i.test(blank.label)) continue;
+          const expected = educationDate(blank, profile);
+          if (expected && field.value !== expected && !(field.type === 'month' && !/^\d{4}-\d{2}$/.test(expected))) {
+            fill(field, expected);
+            filled++;
+          }
         }
         for (const blank of left.values()) {
           blank.target.style.outline = '2px solid #f0883e';
