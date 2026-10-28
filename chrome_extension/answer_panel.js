@@ -3,6 +3,19 @@
 // open-ended questions, then drafts answers you review, edit and paste or fill in.
 (() => {
   if (!window.__jobtrackerAnswers) {
+    // Reloading the extension cuts panels already open on pages off from it ("Extension
+    // context invalidated"). A cut-off panel says so instead of throwing errors.
+    const STALE = 'JobTracker was updated or reloaded. Refresh this page to use the new version.';
+    const alive = () => { try { return !!chrome.runtime?.id; } catch (e) { return false; } };
+    function send(message, callback) {
+      if (!alive()) {
+        observer?.disconnect();
+        observer = null;
+        callback?.({ error: STALE });
+        return;
+      }
+      chrome.runtime.sendMessage(message, callback);
+    }
     // Fields that are form data, not questions to write an answer for
     const SKIP = /\b(first|last|middle|full|legal|preferred)?\s*name\b|e-?mail|phone|mobile|linked\s?in|github|twitter|website|portfolio|\burl\b|address|city|state|zip|postal|country|location|salary|compensation|pronoun|school|university|degree|major|gpa|graduation|date|referr|how did you hear|resume|\bcv\b|cover letter|signature|initials/i;
     const OPEN_ENDED = /\?|\b(why|describe|explain|tell us|share|what|how|which|briefly|walk us)\b/i;
@@ -531,7 +544,7 @@
       let uploads = empty.filter((u) => /resume|\bcv\b|résumé/i.test(u.context) && !otherDocument.test(u.context));
       if (!uploads.length) uploads = empty.filter((u) => !otherDocument.test(u.context)).slice(0, 1);
       if (!uploads.length) return deepAll('input[type="file"]').some((input) => input.files.length) ? 'already' : 'none';
-      const resume = await new Promise((resolve) => chrome.runtime.sendMessage({ type: 'get-resume' }, resolve));
+      const resume = await new Promise((resolve) => send({ type: 'get-resume' }, resolve));
       if (!resume || resume.error) return 'none';
       // Forms that move the file elsewhere after an upload show its name instead
       if (deepText(document.body).includes(resume.name.replace(/\.[a-z]+$/i, ''))) return 'already';
@@ -572,10 +585,10 @@
       let layout = {};
       let loaded = false;
       place(layout);
-      chrome.storage.local.get(LAYOUT_KEY).then((saved) => { layout = saved[LAYOUT_KEY] || {}; place(layout); loaded = true; });
+      if (alive()) chrome.storage.local.get(LAYOUT_KEY).then((saved) => { layout = saved[LAYOUT_KEY] || {}; place(layout); loaded = true; });
       const store = (changes) => {
         layout = { ...layout, ...changes };
-        chrome.storage.local.set({ [LAYOUT_KEY]: layout });
+        if (alive()) chrome.storage.local.set({ [LAYOUT_KEY]: layout });
       };
 
       header.addEventListener('pointerdown', (event) => {
@@ -727,6 +740,7 @@
     function save() {
       clearTimeout(saveTimer);
       saveTimer = setTimeout(async () => {
+        if (!alive()) return;
         const { [SAVE_KEY]: saved = {} } = await chrome.storage.local.get(SAVE_KEY);
         const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
         for (const key of Object.keys(saved)) if (saved[key].t < cutoff) delete saved[key];
@@ -744,7 +758,7 @@
     // later drafts for similar questions reuse the same story
     function remember(item) {
       if (!item.answer.value.trim()) return;
-      chrome.runtime.sendMessage({
+      send({
         type: 'save-answer', frameUrl: location.href,
         question: item.label, note: item.note.value.trim(), answer: item.answer.value,
       });
@@ -819,7 +833,7 @@
       setStatus('Filling the form…');
       try {
         if (!profile) {
-          const result = await new Promise((resolve) => chrome.runtime.sendMessage({ type: 'get-profile' }, resolve));
+          const result = await new Promise((resolve) => send({ type: 'get-profile' }, resolve));
           if (!result || result.error) throw new Error(result?.error || 'No response. Is the JobTracker server running?');
           profile = result.profile;
         }
@@ -878,7 +892,7 @@
         note: item.note.value.trim(),
         previous: item.redo ? item.answer.value.trim() : '',
       }));
-      chrome.runtime.sendMessage({
+      send({
         type: 'draft-answers',
         frameUrl: location.href,
         title: document.title,
@@ -906,6 +920,7 @@
       const typed = new Map(items.map((item) => [item.label, { note: item.note.value, answer: item.answer.value, hidden: item.hidden }]));
       items = findQuestions().map((q) => ({ ...q, redo: false, hidden: false }));
       if (!host) {
+        document.getElementById('jobtracker-answers')?.remove(); // left by an older copy of the extension
         host = document.createElement('div');
         host.id = 'jobtracker-answers';
         host.attachShadow({ mode: 'open' });
@@ -994,7 +1009,7 @@
         list.appendChild(box);
         updateCount(item);
       }
-      chrome.storage.local.get(SAVE_KEY).then(({ [SAVE_KEY]: saved = {} }) => {
+      if (alive()) chrome.storage.local.get(SAVE_KEY).then(({ [SAVE_KEY]: saved = {} }) => {
         for (const item of items) {
           const previous = typed.get(item.label) || saved[keyFor(item)];
           if (!previous) continue;
@@ -1012,11 +1027,11 @@
       setUpLayout(root.querySelector('.panel'));
       root.querySelector('.close').addEventListener('click', () => {
         close();
-        chrome.runtime.sendMessage({ type: 'panel-closed' });
+        send({ type: 'panel-closed' });
       });
       root.querySelector('.pause').addEventListener('click', () => {
         close();
-        chrome.runtime.sendMessage({ type: 'auto-open-off' });
+        send({ type: 'auto-open-off' });
       });
       startWatching();
       root.querySelector('.rescan').addEventListener('click', render);
@@ -1042,6 +1057,11 @@
     function startWatching() {
       if (observer) return;
       observer = new MutationObserver(() => {
+        if (!alive()) {
+          observer?.disconnect();
+          observer = null;
+          return;
+        }
         clearTimeout(watchTimer);
         watchTimer = setTimeout(() => {
           if (host ? questionsChanged() : count()) render();
