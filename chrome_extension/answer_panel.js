@@ -704,20 +704,27 @@
       const attrs = ['id', 'role', 'type', 'name', 'aria-haspopup', 'aria-expanded', 'aria-label', 'placeholder', 'value']
         .map((a) => node.getAttribute?.(a) ? `${a}="${node.getAttribute(a).slice(0, 40)}"` : '').filter(Boolean).join(' ');
       const text = [...(node.childNodes || [])].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent.trim()).join(' ').slice(0, 50);
-      const kids = node.shadowRoot ? [...node.shadowRoot.children] : [...(node.children || [])];
+      // A component shows its shadow children plus the light children it slots in
+      const kids = [...(node.shadowRoot ? node.shadowRoot.children : []), ...(node.children || [])];
       return `${'  '.repeat(depth)}<${node.localName}${attrs ? ` ${attrs}` : ''}${node.shadowRoot ? ' #shadow' : ''}>${text ? ` ${text}` : ''}\n` +
-        kids.filter((k) => !/^(script|style|svg|path)$/.test(k.localName)).slice(0, 15).map((k) => outline(k, depth + 1)).join('');
+        kids.filter((k) => !/^(script|style|svg|path|slot|head)$/.test(k.localName) && k.id !== 'jobtracker-answers')
+          .slice(0, 20).map((k) => outline(k, depth + 1)).join('');
     }
 
     let report = '';
     function setReport(lines) {
       // The phone box's surroundings: the part of these forms most likely to differ
+      // Climb to the phone box's whole row (where a country picker would sit), not the page
       const phones = deepAll('input[type="tel"]').map((tel) => {
         let box = up(tel);
-        for (let i = 0; box && i < 2 && fieldsIn(box).length <= 3; i++) box = up(box);
-        return `--- around the phone box ---\n${outline(box)}`;
+        for (let i = 0; up(box) && i < 5 && fieldsIn(up(box)).length <= 4; i++) box = up(box);
+        return `--- around the phone box ---\n${outline(box).split('\n').slice(0, 120).join('\n')}`;
       });
-      report = [`JobTracker Fill rest report: ${location.host}${location.pathname}`, ...lines, ...phones].join('\n');
+      // Every field on the page, so it's clear what was (and wasn't) there to fill
+      const fields = deepAll(FIELDS).filter((f) => f.type !== 'hidden' && shown(f)).map((f) =>
+        `  ${f.localName}${f.type ? `[${f.type}]` : ''} ${JSON.stringify(labelFor(f).slice(0, 60))} = ${JSON.stringify(
+          (f.type === 'checkbox' || f.type === 'radio' ? String(f.checked) : f.localName === 'select' ? f.selectedOptions[0]?.text || '' : f.value).slice(0, 40))}`);
+      report = [`JobTracker Fill rest report: ${location.host}${location.pathname}`, ...lines, '--- every field on the page ---', ...fields, ...phones].join('\n');
     }
 
     function setStatus(text, isError) {
