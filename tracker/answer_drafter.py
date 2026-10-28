@@ -15,10 +15,9 @@ logger = setup_logging()
 
 # Drafts answers to an application's open-ended questions ("Why us?", "Describe a
 # project...") in the candidate's voice, for the Chrome extension's answer panel.
-# The cheapest model: short first-person answers don't need a bigger one (about
-# 0.1 cents a page instead of ~5 with Opus). Server-side refusal fallbacks aren't
-# offered for Haiku, so a refusal is just reported.
-MODEL = "claude-haiku-5-5"
+# Sonnet: Haiku's drafts (a tenth of the cost) read generic and padded, and Opus
+# costs about twice as much for a small gain. Roughly 2-3 cents a page.
+MODEL = "claude-sonnet-5-5"
 # What the candidate has actually done, beyond the resume. Personal, so it lives
 # outside the repository; answers may only use facts from here, the resume or the note.
 FACTS_FILE = Path.home() / ".config" / "jobtracker" / "answer_facts.md"
@@ -48,6 +47,7 @@ Length and form:
 - Always write in English.
 
 Voice:
+- Every sentence should carry something specific: a named project, a concrete decision they made, or a true detail from the job description. Cut sentences that would fit any candidate or any company ("I'd like to bring that ownership to a fast-moving team").
 - Questions about the person ("Why do you want to work here?", "Why are you a good fit?", "What motivates you?", "Tell us about yourself") are about mindset, interests and what they can do with their Master's training. Don't turn these into a tour of their projects or a list of tools.
 - "Why this company" answers should name something specific and true about the company from the job description, not generic praise.
 - Vary wording between answers; never reuse an opening across questions.
@@ -230,7 +230,7 @@ def draft_answers(urls: List[str], page_title: str, page_text: str, questions: L
     except (json.JSONDecodeError, KeyError):
         return {"error": "Got an unreadable reply; try again."}
     answers = (answers + [""] * len(questions))[:len(questions)]
-    # Haiku sometimes runs past the three-sentence cap; shorten those once
+    # Drafts sometimes run past the three-sentence cap; shorten those once
     if retry_long:
         long = [i for i, (q, a) in enumerate(zip(questions, answers))
                 if _sentences(a) > 3 and not LENGTH_ASKED.search(f"{q['label']} {q.get('note', '')}")]
