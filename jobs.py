@@ -109,9 +109,6 @@ def run_status_management(target_status: str) -> None:
     except (KeyboardInterrupt, EOFError):
         print("\nAction cancelled.")
 
-# Jobs scoring under this fit don't get the paid salary web search
-MIN_FIT_FOR_SALARY = 40
-
 def is_below_salary_floor(salary: str, floor: int = 110000) -> bool:
     """True when a salary is known and even its top end (annualized) is under the floor.
     Ranges are wide and new grads can land anywhere in them, so "$102k - $202k" passes."""
@@ -521,7 +518,7 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
 
     # 7b1. Score how well each unvisited job fits your newest resume (once per job,
     #      and again only when the resume changes). The salary lookups below wait
-    #      for it, so they can skip weak fits; skipped without a resume or API key.
+    #      for it, so they can skip dealbreakers; skipped without a resume or API key.
     def score_fit():
         candidates = [
             j for j in get_tracked_jobs().values()
@@ -544,8 +541,9 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
 
     # 7b2. Jobs still without a salary: have Claude search the web for the posted
     #      range or an estimate (once per job; skipped when no API key is set up).
-    #      Runs after fit scoring so the paid search skips jobs you'll never see:
-    #      ones hidden for a dealbreaker, and weak fits (scored below MIN_FIT_FOR_SALARY).
+    #      Runs after fit scoring so the paid search skips jobs hidden for a dealbreaker.
+    #      Weak fits are still looked up: one under the salary floor then drops off the
+    #      dashboard, which saves checking it by hand.
     fit_future.result()
     fit_executor.shutdown()
     unpriced = [
@@ -561,10 +559,6 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
                 print(f"Reused known salaries for {len(reused)} job(s) (same or similar role at the same company).")
             update_jobs_salary_bulk(reused)
             unpriced = [j for j in unpriced if j["normalized_url"] not in reused]
-        weak = [j for j in unpriced if j.get("fit_score") is not None and j["fit_score"] < MIN_FIT_FOR_SALARY]
-        unpriced = [j for j in unpriced if j not in weak]
-        if weak and print_output:
-            print(f"Skipped the salary search for {len(weak)} weak fit(s) (score under {MIN_FIT_FOR_SALARY}).")
         estimates = estimate_salaries(unpriced)
         if estimates:
             if print_output:
