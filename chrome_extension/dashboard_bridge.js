@@ -18,4 +18,4 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 // Lets the page know the extension is installed, and which version
-document.documentElement.dataset.jobtrackerExtension = '2.6';
+document.documentElement.dataset.jobtrackerExtension = '2.7';

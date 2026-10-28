@@ -22,6 +22,8 @@
       return found;
     }
     const up = (el) => el.parentElement || el.parentNode?.host || null;
+    const FIELDS = 'input, select, textarea';
+    const fieldsIn = (n) => [...deepAll(FIELDS, n), ...(n.shadowRoot ? deepAll(FIELDS, n.shadowRoot) : [])];
     function closestDeep(el, selector) {
       for (let node = el; node; node = up(node)) if (node.matches?.(selector)) return node;
       return null;
@@ -143,7 +145,6 @@
       const optionTexts = inputs.map(optionText).filter(Boolean);
       const within = (node, el) => { for (let n = el; n; n = up(n)) if (n === node) return true; return false; };
       let node = up(inputs[0]);
-      const fieldsIn = (n) => [...deepAll('input, select, textarea', n), ...(n.shadowRoot ? deepAll('input, select, textarea', n.shadowRoot) : [])];
       for (let depth = 0; node && depth < 8; depth++, node = up(node)) {
         if (![...inputs, ...related].every((i) => within(node, i))) continue;
         // Past this point the text belongs to other questions too
@@ -194,12 +195,18 @@
         });
       }
 
+      const US = /united states|\busa?\b|\(\+1\)|^\+1\b/i;
       for (const select of deepAll('select')) {
         if (select.disabled || !shown(select)) continue;
         const options = [...select.options].filter((o) => o.value !== '' && !/^\s*(select|choose|--|please)/i.test(o.text));
-        if (!options.length || options.includes(select.selectedOptions[0])) continue;
+        let phoneCountry = false;
+        for (let n = up(select), i = 0; n && i < 4 && !phoneCountry; n = up(n), i++) {
+          phoneCountry = options.some((o) => US.test(o.text)) && fieldsIn(n).some((f) => f.type === 'tel');
+        }
+        const chosen = select.selectedOptions[0];
+        if (!options.length || (options.includes(chosen) && !(phoneCountry && !US.test(chosen.text)))) continue;
         add({
-          kind: 'choice', label: labelFor(select), options: options.map((o) => clean(o.text)), target: select,
+          kind: 'choice', label: phoneCountry ? 'Phone country code' : labelFor(select), options: options.map((o) => clean(o.text)), target: select,
           apply: (value) => {
             const option = options.find((o) => clean(o.text) === value);
             if (!option) return false;
@@ -247,22 +254,23 @@
         if (!state && input.value) continue;
         if (state && state.options.length) {
           add({ kind: 'choice', label: labelFor(input), options: state.options, target, apply: (value) => !!pageSelect('choose', input, value) });
-        } else if (/location|city|where (are you|do you live)|school|university|college|degree/i.test(labelFor(input))) {
+        } else if (/location|city|where (are you|do you live)|school|university|college|degree|country|dial|phone/i.test(labelFor(input))) {
           add({ kind: 'search', label: labelFor(input), options: [], target, input, react: !!state });
         }
       }
 
-      const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input[type="date"], input:not([type])';
+      const textFields = 'input[type="text"], input[type="email"], input[type="url"], input[type="tel"], input[type="number"], input[type="date"], input[type="month"], input:not([type])';
       for (const field of deepAll(textFields)) {
         if (written.has(field) || field.value || field.disabled || field.readOnly || !shown(field)) continue;
         if (field.getAttribute('role') === 'combobox' || field.hasAttribute('aria-autocomplete') || field.getAttribute('aria-hidden') === 'true') continue;
         const label = labelFor(field);
-        if (label.length < 3) continue;
+        if (label.length < 2) continue; // short labels are real: "To" on an education date
         add({
           kind: 'text', label, options: [], target: field, field,
           apply: (value) => {
-            // A date box only takes YYYY-MM-DD; "Immediately" can't go in one
+            // Date boxes only take YYYY-MM-DD (month boxes YYYY-MM); "Immediately" can't go in one
             if (field.type === 'date' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+            if (field.type === 'month' && !/^\d{4}-\d{2}$/.test(value)) return false;
             fill(field, value);
             return true;
           },
@@ -306,6 +314,60 @@
       return now.getFullYear() - y - (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d) ? 1 : 0);
     }
 
+    // The education entry a field belongs to: the one whose school is named nearby
+    // (typed or shown), else by order (the nth "School" field gets the nth entry)
+    function educationFor(b, P) {
+      const list = P.education || [];
+      if (!list.length) return null;
+      let node = b.target;
+      for (let i = 0; i < 6 && node; i++, node = up(node)) {
+        const fields = fieldsIn(node);
+        if (fields.length > 14) break;
+        const seen = `${deepText(node)} ${fields.map((f) => (f.tagName === 'SELECT' ? f.selectedOptions[0]?.text : f.value) || '').join(' ')}`.toLowerCase();
+        const hit = list.find((e) => seen.includes(e.school.toLowerCase().split(' ').slice(0, 2).join(' ')));
+        if (hit) return hit;
+      }
+      const el = b.field || b.input || b.target;
+      const same = deepAll(FIELDS).filter((f) => labelFor(f) === b.label);
+      return list[Math.min(Math.max(0, same.indexOf(el)), list.length - 1)];
+    }
+    // Is this field part of an education entry? Its label says so, or the smallest
+    // group of fields around it (one entry, not the whole form) has a school field.
+    function inEducation(b) {
+      if (/school|university|college|degree|education|institution|major|field of study/i.test(b.label)) return true;
+      for (let node = up(b.target), i = 0; node && i < 6; node = up(node), i++) {
+        const fields = fieldsIn(node);
+        if (fields.length < 2) continue;
+        return fields.length <= 8 && fields.some((f) => /school|university|college|institution/i.test(labelFor(f)));
+      }
+      return false;
+    }
+    const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    // An education start/end date, written the way this field wants it
+    function educationDate(b, P) {
+      const which = /\b(from|start|begin|began|entry)\b/i.test(b.label) ? 'start'
+        : /\b(to|end|until|finish|graduat|completion|completed)\b/i.test(b.label) ? 'end' : null;
+      if (!which || !inEducation(b)) return null;
+      const entry = educationFor(b, P);
+      if (!entry?.[which]) return null;
+      const [y, m] = entry[which].split('-');
+      if (b.kind === 'choice' || b.kind === 'search') {
+        // Separate month and year dropdowns
+        const month = pick(b.options, [new RegExp(`^${MONTHS[m - 1]}`, 'i'), new RegExp(`^0?${Number(m)}$`)]);
+        return /year/i.test(b.label) || b.options.some((o) => o === y) ? pick(b.options, [new RegExp(`^${y}$`)]) : month;
+      }
+      const field = b.field;
+      if (field?.type === 'month') return `${y}-${m}`;
+      if (field?.type === 'date') return `${y}-${m}-01`;
+      const hint = `${field?.placeholder || ''} ${b.label}`.toLowerCase();
+      if (/\byear\b/.test(b.label.toLowerCase()) && !/month/.test(b.label.toLowerCase())) return y;
+      if (/\bmonth\b/.test(b.label.toLowerCase()) && !/year/.test(b.label.toLowerCase())) return m;
+      if (/mm\s*\/\s*dd\s*\/\s*yyyy/.test(hint)) return `${m}/01/${y}`;
+      if (/yyyy\s*-\s*mm/.test(hint)) return `${y}-${m}`;
+      if (/mm\s*\/\s*yy(?!yy)\b/.test(hint)) return `${m}/${y.slice(2)}`;
+      return `${m}/${y}`;
+    }
+
     function rules(P) {
       const worksHere = () => (P.past_employers || []).some((e) => new RegExp(`\\b${escapeRe(e)}\\b`, 'i').test(`${document.title} ${location.hostname}`));
       // A null answer means "not this rule": the next matching rule gets a turn
@@ -344,6 +406,7 @@
         [/communit|belong to/, (b) => pick(b.options, [/none of the above/i]) || pick(b.options, DECLINE)],
         [/pronoun/, () => ''],
         [/\bgpa\b|grade point/, () => ''],
+        [/\b(from|to|start|end|begin|until|finish|graduat\w*|completion|month|year|dates?)\b/, (b) => educationDate(b, P)],
         [/enrolled|graduat|currently a student/, (b) => pick(b.options, [/already graduated|^graduated|not (currently )?(enrolled|a student)|alumn/i])],
         [/start date|start working|available to start|earliest|notice period/, (b) => (b.kind === 'text' ? P.start_date
           : pick(b.options, [/immediate|asap|right away|^now/i, /2 weeks|two weeks/i]))],
@@ -361,12 +424,20 @@
         [/linkedin/, text(P.linkedin)],
         [/github/, text(P.github)],
         [/website|portfolio|personal (site|url)/, text(P.website)],
-        [/\bcountry\b/, (b) => (b.kind === 'text' ? P.country : pick(b.options, [/^united states|^usa?$|^u\.s\./i]))],
+        [/\bcountry\b|country code|dial(ing)? code|phone (country|code)/, (b) => (b.kind === 'text' || b.kind === 'search' ? P.country
+          : pick(b.options, [/^united states\b/i, /\bunited states\b/i, /^usa?\b|\bu\.s\.a?\b/i, /\(\+1\)|^\+1\b/]))],
         [/\b(state|province)\b/, (b) => (b.kind === 'text' ? P.state : pick(b.options, [new RegExp(`^${escapeRe(P.state)}`, 'i'), /^il$/i]))],
         [/\bcity\b|location|located|where (are you|do you live)|current address|based in/, (b) => (b.kind === 'text' || b.kind === 'search'
           ? (b.kind === 'search' || /\bcity\b/i.test(b.label) ? P.city : P.location) : '')],
-        [/school|university|college|institution/, (b) => (b.kind === 'choice' ? pick(b.options, [/johns hopkins/i]) : P.school)],
-        [/degree/, (b) => (b.kind === 'text' ? P.degree : b.kind === 'search' ? 'Master' : pick(b.options, [/master/i]))],
+        [/school|university|college|institution/, (b) => {
+          const entry = educationFor(b, P) || { school: P.school };
+          return b.kind === 'choice' ? pick(b.options, [new RegExp(escapeRe(entry.school.split(' ').slice(0, 2).join(' ')), 'i')]) : entry.school;
+        }],
+        [/degree/, (b) => {
+          const entry = educationFor(b, P) || { degree: P.degree, level: 'master' };
+          const level = entry.level === 'bachelor' ? /bachelor|b\.?s\b|undergrad/i : /master|m\.?s\b|m\.?eng/i;
+          return b.kind === 'text' ? entry.degree : b.kind === 'search' ? (entry.level === 'bachelor' ? 'Bachelor' : 'Master') : pick(b.options, [level]);
+        }],
       ];
     }
 
