@@ -5,7 +5,7 @@ import os
 import threading
 from pathlib import Path
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs, parse_qsl, unquote, urlencode, urlunparse
+from urllib.parse import urlparse, parse_qs
 import subprocess
 
 # Ensure project root is in sys.path
@@ -14,7 +14,7 @@ sys.path.insert(0, str(BASE_DIR))
 
 from jobs import run_fetch_pipeline
 from tracker.database import get_tracked_jobs, update_jobs_status_bulk, update_job_status
-from tracker.normalizer import normalize_url
+from tracker.normalizer import normalize_url, tab_key, load_page_links, PAGE_LINKS_FILE
 from tracker.answer_drafter import draft_answers, load_profile, resume_for_upload, save_answer
 
 PORT = 5050
@@ -30,27 +30,7 @@ last_fetch_info = {
     "status": "idle"
 }
 
-# Pages a job tab went on to (a LinkedIn job's company site), as tab key -> the job's
-# tab key. Kept in cache/, since these URLs are personal browsing
-PAGE_LINKS_FILE = BASE_DIR / "cache" / "page_links.json"
 page_links_lock = threading.Lock()
-
-
-def _load_page_links():
-    try:
-        return json.loads(PAGE_LINKS_FILE.read_text())
-    except (OSError, ValueError):
-        return {}
-
-
-def _tab_key(url):
-    """normalize_url, made looser for matching open tabs: an apply page carries
-    tracking parameters (Lever's lever-source) and encodes commas (Workday's
-    "Boulder%2C-CO") that the stored link doesn't. Not for dedupe keys."""
-    parsed = urlparse(normalize_url(url))
-    path = unquote(parsed.path).replace(",", "")
-    query = [(k, v) for k, v in parse_qsl(parsed.query) if not k.lower().startswith("lever-") and k not in ("_pc", "src")]
-    return urlunparse(parsed._replace(path=path, query=urlencode(query)))
 
 
 class JobTrackerHandler(SimpleHTTPRequestHandler):
@@ -176,13 +156,13 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             for job in get_tracked_jobs().values():
                 for link in (job["normalized_url"], job.get("original_url"), job.get("apply_url")):
                     if link:
-                        by_url.setdefault(_tab_key(link), job.get("fit_score"))
-            links = _load_page_links()
+                        by_url.setdefault(tab_key(link), job.get("fit_score"))
+            links = load_page_links()
             scores = {}
             jobs = []
             for url in urls:
                 if url.startswith("http") and "localhost" not in url and "127.0.0.1" not in url:
-                    key = _tab_key(url)
+                    key = tab_key(url)
                     key = key if key in by_url else links.get(key)
                     if key in by_url:
                         jobs.append(url)
@@ -202,9 +182,9 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
             data = json.loads(body)
             with page_links_lock:
-                links = _load_page_links()
-                job = _tab_key(data.get("job_url", ""))
-                links[_tab_key(data.get("url", ""))] = links.get(job, job)
+                links = load_page_links()
+                job = tab_key(data.get("job_url", ""))
+                links[tab_key(data.get("url", ""))] = links.get(job, job)
                 PAGE_LINKS_FILE.write_text(json.dumps(links, indent=1))
             self.send_response(200)
             self.send_header("Content-Type", "application/json")

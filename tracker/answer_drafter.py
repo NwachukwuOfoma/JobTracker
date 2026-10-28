@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from tracker.config import setup_logging
-from tracker.database import get_job_descriptions, get_tracked_jobs
+from tracker.database import get_job_descriptions, get_tracked_jobs, save_job_descriptions
 from tracker.fit_scorer import find_latest_resume, load_resume
-from tracker.normalizer import normalize_url
+from tracker.job_details import fetch_description
+from tracker.normalizer import load_page_links, tab_key
 from tracker.salary_estimator import _load_api_key
 
 logger = setup_logging()
@@ -121,22 +122,22 @@ def save_answer(urls: List[str], question: str, note: str, answer: str) -> Dict:
 
 
 def _find_job(urls: List[str]) -> Optional[Dict]:
-    """The tracked job one of these page URLs belongs to, if any."""
+    """The tracked job one of these page URLs belongs to, if any: matched as loosely as
+    the extension's job-tab count, including company pages a LinkedIn job led to."""
+    links = load_page_links()
     wanted = set()
     for url in urls:
         if url and url.startswith("http"):
             try:
-                wanted.add(normalize_url(url))
+                key = tab_key(url)
+                wanted.update({key, links.get(key, key)})
             except Exception:
                 pass
     if not wanted:
         return None
     for job in get_tracked_jobs().values():
-        links = {job["normalized_url"]}
-        for link in (job.get("original_url"), job.get("apply_url")):
-            if link:
-                links.add(normalize_url(link))
-        if links & wanted:
+        keys = {tab_key(link) for link in (job["normalized_url"], job.get("original_url"), job.get("apply_url")) if link}
+        if keys & wanted:
             return job
     return None
 
@@ -168,6 +169,13 @@ def draft_answers(urls: List[str], page_title: str, page_text: str, questions: L
     description = ""
     if job:
         description = get_job_descriptions([job["normalized_url"]]).get(job["normalized_url"], "")
+        # Never read yet (e.g. a job marked applied before it was scored): without it,
+        # "Why us?" answers have only the application form to go on. Workable
+        # rate-limits, so its jobs are left to the fit scorer's single request.
+        if not description and "workable.com" not in job["normalized_url"]:
+            description = fetch_description(job.get("original_url") or job["normalized_url"], attempts=1)
+            if description:
+                save_job_descriptions({job["normalized_url"]: description})
     if job:
         about_job = f"Company: {job['company']}\nRole: {job['title']}"
     else:

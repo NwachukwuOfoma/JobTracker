@@ -1,7 +1,8 @@
 import re
-from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
+import json
+from urllib.parse import urlparse, parse_qsl, unquote, urlencode, urlunparse
 from typing import List, Dict, Any, Set, Optional, Tuple
-from tracker.config import setup_logging
+from tracker.config import CACHE_DIR, setup_logging
 
 logger = setup_logging()
 
@@ -85,6 +86,28 @@ def normalize_url(url: str) -> str:
     except Exception as e:
         logger.warning(f"Failed to normalize URL '{url}': {e}")
         return url.strip()
+
+# Pages a job tab went on to (a LinkedIn job's company site), as tab key -> the job's
+# tab key. Kept in cache/, since these URLs are personal browsing
+PAGE_LINKS_FILE = CACHE_DIR / "page_links.json"
+
+
+def load_page_links():
+    try:
+        return json.loads(PAGE_LINKS_FILE.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def tab_key(url):
+    """normalize_url, made looser for matching open tabs: an apply page carries
+    tracking parameters (Lever's lever-source) and encodes commas (Workday's
+    "Boulder%2C-CO") that the stored link doesn't. Not for dedupe keys."""
+    parsed = urlparse(normalize_url(url))
+    path = unquote(parsed.path).replace(",", "")
+    query = [(k, v) for k, v in parse_qsl(parsed.query) if not k.lower().startswith("lever-") and k not in ("_pc", "src")]
+    return urlunparse(parsed._replace(path=path, query=urlencode(query)))
+
 
 def deduplicate_jobs(jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
