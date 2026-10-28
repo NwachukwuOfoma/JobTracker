@@ -1016,7 +1016,7 @@
         item.count.className = 'count';
         const redo = document.createElement('button');
         redo.textContent = 'Redo';
-        redo.title = 'Draft this one again (uses your note, and avoids the current draft)';
+        redo.title = 'Draft this one again with a stronger model (uses your note, and avoids the current draft)';
         redo.addEventListener('click', () => { item.redo = !!item.answer.value.trim(); draft([item]); });
         const copy = document.createElement('button');
         copy.textContent = 'Copy';
