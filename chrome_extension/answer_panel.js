@@ -740,7 +740,14 @@
       const fields = deepAll(FIELDS).filter((f) => f.type !== 'hidden' && shown(f)).map((f) =>
         `  ${f.localName}${f.type ? `[${f.type}]` : ''} ${JSON.stringify(labelFor(f).slice(0, 60))} = ${JSON.stringify(
           (f.type === 'checkbox' || f.type === 'radio' ? String(f.checked) : f.localName === 'select' ? f.selectedOptions[0]?.text || '' : f.value).slice(0, 40))}`);
-      report = [`JobTracker Fill rest report: ${location.host}${location.pathname}`, ...lines, '--- every field on the page ---', ...fields, ...phones].join('\n');
+      // The education section as shown (summary cards and their edit buttons), so editing
+      // entries can be automated for forms that only show the dates after "Edit"
+      const heading = deepAll('h1, h2, h3, h4, legend, [role="heading"], spl-typography-heading, p, span')
+        .find((el) => /^education$/i.test(clean(deepText(el))));
+      let section = heading && up(heading);
+      for (let i = 0; section && i < 3 && clean(deepText(section)).length < 60; i++) section = up(section);
+      const education = section ? [`--- education section ---\n${outline(section).split('\n').slice(0, 100).join('\n')}`] : ['--- no education section found ---'];
+      report = [`JobTracker Fill rest report: ${location.host}${location.pathname}`, ...lines, '--- every field on the page ---', ...fields, ...phones, ...education].join('\n');
     }
 
     function setStatus(text, isError) {
