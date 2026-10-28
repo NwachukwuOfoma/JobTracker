@@ -266,7 +266,8 @@
 
       // Comboboxes: React dropdowns with their options, or search boxes (location)
       for (const input of deepAll('input[role="combobox"]')) {
-        if (!shown(input)) continue;
+        // A dropdown's own filter box ("Search by country/region or code") isn't a question
+        if (!shown(input) || /^search\b/i.test(labelFor(input) || input.placeholder || '')) continue;
         const state = pageSelect('state', input);
         const target = closestDeep(input, '[class*="control"]') || input;
         if (state && !state.empty) continue;
@@ -284,13 +285,15 @@
         // Only within the phone box's own small group, and never another labeled field
         // (Ashby's Location search box sits near its phone box)
         const TRIGGER = '[role="combobox"], [aria-haspopup="listbox"], [aria-haspopup="true"]';
-        let trigger = null;
-        for (let n = up(tel), i = 0; n && i < 4 && !trigger && fieldsIn(n).length <= 3; n = up(n), i++) {
+        // A picker labeled as one ("Country code" on SmartRecruiters) can sit many levels away
+        let trigger = deepAll(TRIGGER).find((el) => el.tagName !== 'INPUT' && shown(el) &&
+          /country code|dial(ing)? code|calling code|phone code/i.test(`${el.getAttribute('aria-label') || ''} ${labelFor(el)}`)) || null;
+        for (let n = up(tel), i = 0; n && i < 8 && !trigger && fieldsIn(n).length <= 3; n = up(n), i++) {
           trigger = [...deepAll(TRIGGER, n), ...(n.shadowRoot ? deepAll(TRIGGER, n.shadowRoot) : [])]
             .find((el) => el !== tel && el.tagName !== 'SELECT' && shown(el) &&
               (el.tagName !== 'INPUT' || /code|country|dial|phone/i.test(labelFor(el)))) || null;
         }
-        if (!trigger || US.test(`${deepText(trigger)} ${trigger.value || ''}`)) continue;
+        if (!trigger || US.test(`${deepText(trigger)} ${trigger.value || ''}`) || /\+\s?1\b(?!\d)/.test(deepText(trigger))) continue;
         add({ kind: 'dropdown', label: 'Phone country code', options: [], target: trigger, trigger });
       }
 
@@ -496,11 +499,24 @@
       };
       open(blank.trigger);
       await sleep(600);
+      // Option text can come in through slots (SmartRecruiters draws each option inside
+      // nested components), so read it as shown, from the option or the element around it
+      const textOf = (o) => {
+        for (let node = o, i = 0; node && i < 4; node = up(node), i++) {
+          const text = clean(deepText(node));
+          if (text) return text;
+        }
+        return '';
+      };
       const options = deepAll('[role="option"]').filter((o) => o.getClientRects().length);
-      const prefer = [new RegExp(`^${escapeRe(value)}\\b`, 'i'), new RegExp(`\\b${escapeRe(value)}\\b`, 'i')];
-      if (/united states/i.test(value)) prefer.push(/\busa?\b/i);
-      const text = pick(options.map((o) => clean(o.textContent)), prefer);
-      const option = options.find((o) => clean(o.textContent) === text);
+      // A country code ("US") on the option or its host is the surest match
+      let option = /united states/i.test(value) ? options.find((o) => closestDeep(o, '[value]')?.getAttribute('value') === 'US') : null;
+      if (!option) {
+        const prefer = [new RegExp(`^${escapeRe(value)}(\\s*\\+\\s*\\d+)?$`, 'i'), new RegExp(`^${escapeRe(value)}\\b`, 'i'), new RegExp(`\\b${escapeRe(value)}\\b`, 'i')];
+        if (/united states/i.test(value)) prefer.push(/\busa?\b/i);
+        const text = pick(options.map(textOf), prefer);
+        option = options.find((o) => textOf(o) === text);
+      }
       if (!option) {
         blank.trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true }));
         return false;
