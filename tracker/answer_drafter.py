@@ -124,6 +124,32 @@ def save_answer(urls: List[str], question: str, note: str, answer: str) -> Dict:
     return {"saved": True}
 
 
+def _question_key(text: str) -> str:
+    """A question's wording without case, punctuation or the required-field star."""
+    return " ".join(re.findall(r"[a-z0-9]+", text.lower()))
+
+
+def saved_answers(urls: List[str], questions: List[Dict], job: Optional[Dict] = None) -> List[str]:
+    """
+    For each question, the answer approved for the same question at the same company
+    (e.g. a second posting's application), or "". A question whose note differs from
+    the one that answer was written with gets "", so the note steers a fresh draft.
+    """
+    job = job or _find_job(urls)
+    if not job:
+        return [""] * len(questions)
+    latest = {}
+    for h in _load_history():
+        if h.get("company") == job["company"]:
+            latest[_question_key(h["question"])] = h
+    answers = []
+    for q in questions:
+        past = latest.get(_question_key(q["label"]))
+        note = (q.get("note") or "").strip()
+        answers.append(past["answer"] if past and note in ("", past.get("note", "")) else "")
+    return answers
+
+
 def _find_job(urls: List[str]) -> Optional[Dict]:
     """The tracked job one of these page URLs belongs to, if any: matched as loosely as
     the extension's job-tab count, including company pages a LinkedIn job led to."""
@@ -153,11 +179,28 @@ def _sentences(text: str) -> int:
     return len(re.findall(r"[.!?](?=\s|$)", text.strip()))
 
 
-def draft_answers(urls: List[str], page_title: str, page_text: str, questions: List[Dict], retry_long: bool = True) -> Dict:
+def draft_answers(urls: List[str], page_title: str, page_text: str, questions: List[Dict]) -> Dict:
     """
     questions: [{"label", "max_length" (int or None), "note" (optional), "previous" (optional)}].
     Returns {"answers": [str, ...], "job": "Company - Title" or ""} or {"error": "..."}.
+    A question already answered and approved at this company gets that answer again,
+    with no API call; Redo always drafts a new one.
     """
+    job = _find_job(urls)
+    reused = saved_answers(urls, questions, job)
+    reused = [a if not q.get("previous") else "" for q, a in zip(questions, reused)]
+    todo = [i for i, a in enumerate(reused) if not a]
+    result = {"answers": [], "job": f"{job['company']} - {job['title']}" if job else ""}
+    if todo:
+        result = _draft(urls, page_title, page_text, [questions[i] for i in todo])
+        if "error" in result:
+            return result
+    drafted = iter(result["answers"])
+    result["answers"] = [a or next(drafted, "") for a in reused]
+    return result
+
+
+def _draft(urls: List[str], page_title: str, page_text: str, questions: List[Dict], retry_long: bool = True) -> Dict:
     resume, _, _ = load_resume()
     key = _load_api_key()
     if not resume:
@@ -246,7 +289,7 @@ def draft_answers(urls: List[str], page_title: str, page_text: str, questions: L
         long = [i for i, (q, a) in enumerate(zip(questions, answers))
                 if _sentences(a) > 3 and not LENGTH_ASKED.search(f"{q['label']} {q.get('note', '')}")]
         if long:
-            shorter = draft_answers(urls, page_title, page_text, [
+            shorter = _draft(urls, page_title, page_text, [
                 {**questions[i], "previous": "", "note": f"{questions[i].get('note', '')} Rewrite this draft in at most three sentences, keeping its story: {answers[i]}".strip()}
                 for i in long
             ], retry_long=False).get("answers", [])

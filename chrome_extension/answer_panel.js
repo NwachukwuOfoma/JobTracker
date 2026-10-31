@@ -960,6 +960,29 @@
       });
     }
 
+    // Questions still empty that you already answered for this company (on another of
+    // its postings) get that approved answer, with no drafting
+    function useApprovedAnswers() {
+      const empty = items.filter((item) => !item.answer.value.trim());
+      if (!empty.length) return;
+      send({
+        type: 'saved-answers', frameUrl: location.href,
+        questions: empty.map((item) => ({ label: item.label, note: item.note.value.trim() })),
+      }, (result) => {
+        let used = 0;
+        (result?.answers || []).forEach((answer, i) => {
+          const item = empty[i];
+          if (!answer || item.answer.value.trim() || !items.includes(item)) return;
+          item.answer.value = answer;
+          updateCount(item);
+          used++;
+        });
+        if (!used) return;
+        save();
+        setStatus(`Filled in ${used} answer${used === 1 ? '' : 's'} you approved on this company's other application. Redo drafts a new one.`);
+      });
+    }
+
     function render() {
       // What's typed in the panel right now carries over a Rescan, even before it's saved
       const typed = new Map(items.map((item) => [item.label, { note: item.note.value, answer: item.answer.value, hidden: item.hidden }]));
@@ -1077,6 +1100,7 @@
           item.answer.value = previous.answer || '';
           updateCount(item);
         }
+        useApprovedAnswers();
       });
       root.querySelector('.show-hidden').addEventListener('click', () => {
         items.filter((item) => item.hidden).forEach((item) => setHidden(item, false));

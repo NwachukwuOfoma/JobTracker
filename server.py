@@ -15,7 +15,7 @@ sys.path.insert(0, str(BASE_DIR))
 from jobs import run_fetch_pipeline
 from tracker.database import get_tracked_jobs, update_jobs_status_bulk, update_job_status
 from tracker.normalizer import normalize_url, tab_key, load_page_links, PAGE_LINKS_FILE
-from tracker.answer_drafter import draft_answers, load_profile, resume_for_upload, save_answer
+from tracker.answer_drafter import draft_answers, load_profile, resume_for_upload, save_answer, saved_answers
 
 PORT = 5050
 HOST = "127.0.0.1"
@@ -215,6 +215,23 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
         if parsed.path in ("/api/profile", "/api/resume"):
             # The answer panel's "Fill rest": your standard answers and newest resume
             result = load_profile() if parsed.path == "/api/profile" else resume_for_upload()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
+            return
+
+        if parsed.path == "/api/saved_answers":
+            # The answer panel opening: answers you approved for these questions at this
+            # company before (another of its postings), shown without drafting
+            content_len = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+            try:
+                data = json.loads(body)
+                result = {"answers": saved_answers(data.get("urls", []), data.get("questions", []))}
+            except Exception as e:
+                result = {"error": str(e)}
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self._send_cors_headers()
