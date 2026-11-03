@@ -68,13 +68,14 @@
       const wrapping = closestDeep(field, 'label');
       if (wrapping && clean(wrapping.innerText)) return clean(wrapping.innerText);
       // Otherwise the nearest text just above the box, stopping at the previous field
-      // (Gem: <span>Question</span><div><div><textarea>, with nothing linking the two)
+      // (Gem: <span>Question</span><div><div><textarea>, with nothing linking the two;
+      // iCIMS: <span>*</span>Question<br><span><textarea>, the question a bare text node)
       for (let node = field, depth = 0; node && depth < 5; depth++, node = up(node)) {
-        let sibling = node.previousElementSibling;
-        for (; sibling; sibling = sibling.previousElementSibling) {
+        let sibling = node.previousSibling;
+        for (; sibling; sibling = sibling.previousSibling) {
           if (sibling.querySelector?.('input, textarea, select')) break;
-          const text = clean(sibling.innerText);
-          if (text) return text;
+          const text = clean(sibling.nodeType === Node.TEXT_NODE ? sibling.textContent : sibling.innerText);
+          if (/[a-z]/i.test(text || '')) return text;
         }
         if (sibling) break;
       }
