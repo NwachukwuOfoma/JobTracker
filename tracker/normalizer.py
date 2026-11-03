@@ -92,11 +92,26 @@ def normalize_url(url: str) -> str:
 PAGE_LINKS_FILE = CACHE_DIR / "page_links.json"
 
 
+# A page a job tab went on to only counts as that job when it looks like part of an
+# application, so other sites opened from a job tab (Claude, a news site) stay out
+JOB_PAGE = re.compile(
+    r"job|career|apply|applicat|recruit|talent|hiring|hire|candidate|lifeat|position|opening|vacanc|"
+    r"employment|join|requisition|workday|greenhouse|lever\.co|icims|ashby|oraclecloud|smartrecruiters|"
+    r"ultipro|eightfold|adp\.com|taleo|jobvite|successfactors|workable|gem\.com",
+    re.I,
+)
+
+
+def is_job_page(url):
+    return bool(JOB_PAGE.search(url))
+
+
 def load_page_links():
     try:
-        return json.loads(PAGE_LINKS_FILE.read_text())
+        links = json.loads(PAGE_LINKS_FILE.read_text())
     except (OSError, ValueError):
         return {}
+    return {page: job for page, job in links.items() if is_job_page(page)}
 
 
 def tab_key(url):

@@ -14,7 +14,7 @@ sys.path.insert(0, str(BASE_DIR))
 
 from jobs import run_fetch_pipeline
 from tracker.database import get_tracked_jobs, update_jobs_status_bulk, update_job_status
-from tracker.normalizer import normalize_url, tab_key, load_page_links, PAGE_LINKS_FILE
+from tracker.normalizer import normalize_url, tab_key, load_page_links, is_job_page, PAGE_LINKS_FILE
 from tracker.answer_drafter import draft_answers, load_profile, resume_for_upload, save_answer, saved_answers
 
 PORT = 5050
@@ -182,10 +182,11 @@ class JobTrackerHandler(SimpleHTTPRequestHandler):
             body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
             data = json.loads(body)
             with page_links_lock:
-                links = load_page_links()
-                job = tab_key(data.get("job_url", ""))
-                links[tab_key(data.get("url", ""))] = links.get(job, job)
-                PAGE_LINKS_FILE.write_text(json.dumps(links, indent=1))
+                if is_job_page(data.get("url", "")):
+                    links = load_page_links()
+                    job = tab_key(data.get("job_url", ""))
+                    links[tab_key(data.get("url", ""))] = links.get(job, job)
+                    PAGE_LINKS_FILE.write_text(json.dumps(links, indent=1))
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self._send_cors_headers()
