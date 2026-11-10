@@ -19,6 +19,8 @@
     // Fields that are form data, not questions to write an answer for
     const SKIP = /\b(first|last|middle|full|legal|preferred)?\s*name\b|e-?mail|phone|mobile|linked\s?in|github|twitter|website|portfolio|\burl\b|address|city|state|zip|postal|country|location|salary|compensation|pronoun|school|university|degree|major|gpa|graduation|date|referr|how did you hear|resume|\bcv\b|cover letter|signature|initials/i;
     const OPEN_ENDED = /\?|\b(why|describe|explain|tell us|share|what|how|which|briefly|walk us)\b/i;
+    // Short questions about your interest in the company or role ("Why Ande?", "What excites you about us?")
+    const MOTIVATION = /^(why\b|what (excites|interests|draws|attracts|motivates)\b)/i;
     // Short questions that want a number ("How many years of experience do you have?")
     const NUMERIC = /^(how many|number of)\b|\byears of (\S+ )?(work |professional |industry )?experience do you have\b/i;
 
@@ -105,8 +107,8 @@
         const isQuestion = label.length >= 50 && OPEN_ENDED.test(label);
         if (SKIP.test(label) && !isQuestion) continue;
         if (label.length < 120 && NUMERIC.test(label)) continue;
-        // Short text boxes count only when they're clearly asking something
-        if (field.tagName !== 'TEXTAREA' && !(label.length >= 30 && OPEN_ENDED.test(label))) continue;
+        // Short text boxes count only when they're clearly asking something ("Why Ande?" is short but is one)
+        if (field.tagName !== 'TEXTAREA' && !(label.length >= 30 && OPEN_ENDED.test(label)) && !MOTIVATION.test(label)) continue;
         if (found.some((q) => q.field === field)) continue;
         const max = Number(field.getAttribute('maxlength')) || null;
         found.push({ field, label, maxLength: max && max > 0 && max < 100000 ? max : null });
