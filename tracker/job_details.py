@@ -114,6 +114,20 @@ def _icims(url: str) -> Optional[str]:
         return None
     return _generic(url.split("#")[0] + ("&" if "?" in url else "?") + "in_iframe=1")
 
+def _apple(url: str) -> Optional[str]:
+    # The page renders in the browser; the posting sits in its embedded router data
+    resp = requests.get(url, headers=HEADERS, timeout=8, allow_redirects=True)
+    m = re.search(r"window\.__staticRouterHydrationData\s*=\s*JSON\.parse\((\".*?\")\);", resp.text, re.S)
+    if resp.status_code != 200 or not m:
+        return None
+    job = json.loads(json.loads(m.group(1))).get("loaderData", {}).get("jobDetails", {}).get("jobsData") or {}
+    keys = ("jobSummary", "description", "responsibilities", "minimumQualifications", "preferredQualifications")
+    parts = [_text(job.get(k) or "") for k in keys]
+    # The first footer is the pay range
+    footers = (job.get("postingFooters") or [{}])[0].get("localizations", {}).get("en_US") or []
+    parts += [_text(f.get("content") or "") for f in footers[:1]]
+    return "\n".join(p for p in parts if p)
+
 def _linkedin(url: str) -> Optional[str]:
     m = re.search(r"linkedin\.com/jobs/view/(?:[^/?#]*-)?(\d+)", url)
     if not m:
@@ -182,6 +196,8 @@ def _fetch_once(url: str) -> Optional[str]:
             text = _workable(url)
         elif "icims.com" in url:
             text = _icims(url)
+        elif "jobs.apple.com" in url:
+            text = _apple(url)
         elif "linkedin.com/jobs" in url:
             text = _linkedin(url)
         else:
