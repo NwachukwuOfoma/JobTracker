@@ -228,7 +228,7 @@ def score_jobs(jobs: List[Dict]) -> Tuple[Dict[str, Dict], Optional[str]]:
         return {}, resume_hash
     import anthropic
 
-    client = anthropic.Anthropic(api_key=key, max_retries=5)
+    client = anthropic.Anthropic(api_key=key, max_retries=5, timeout=60)  # never let one stalled call hold up the fetch
     # Jobs already scored without a description (the page didn't load then) get re-scored
     # once it loads, for a few days after they're first seen
     recent = (datetime.now() - timedelta(days=DESCRIPTION_RETRY_DAYS)).isoformat()

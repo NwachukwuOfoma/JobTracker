@@ -19,6 +19,9 @@ MAX_SEARCHES_PER_JOB = 3
 # Each lookup reads ~50k tokens of search results; new API accounts are limited to
 # ~500k input tokens/minute, so more parallel lookups just wait on rate-limit retries
 MAX_WORKERS = 4
+# A lookup normally takes 5-15s; the SDK's default 10-minute timeout let one stalled
+# connection hold up the whole fetch. A timed-out job is retried on the next fetch.
+REQUEST_TIMEOUT = 90
 
 # The background server (launchd) doesn't inherit your shell's environment, so the
 # key can also live in this private file, outside the repository.
@@ -65,7 +68,7 @@ def _client():
     except ImportError:
         logger.warning("Salary estimates skipped: the 'anthropic' package isn't installed (pip install anthropic).")
         return None
-    return anthropic.Anthropic(api_key=key)
+    return anthropic.Anthropic(api_key=key, timeout=REQUEST_TIMEOUT)
 
 def _format(report: Dict) -> str:
     """Turns a report into the salary string stored in the DB ("" when nothing was found)."""
