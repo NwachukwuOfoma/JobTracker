@@ -219,6 +219,8 @@ def run_export() -> None:
             "fit_score": job.get("fit_score"),
             "fit_note": job.get("fit_note") or "",
             "fit_flags": job.get("fit_flags") or "",
+            "fit_strengths": job.get("fit_strengths") or "",
+            "fit_gaps": job.get("fit_gaps") or "",
             "similar_status": interacted_map.get((job["company"].lower().strip(), job["title"].lower().strip()), "")
         }
         for job in tracked.values()
@@ -641,6 +643,8 @@ def run_fetch_pipeline(force_refresh: bool = False, print_output: bool = True, s
             "fit_score": j.get("fit_score"),
             "fit_note": j.get("fit_note") or "",
             "fit_flags": j.get("fit_flags") or "",
+            "fit_strengths": j.get("fit_strengths") or "",
+            "fit_gaps": j.get("fit_gaps") or "",
             "normalized_url": j["normalized_url"],
             "similar_status": interacted_map.get((j["company"].lower().strip(), j["title"].lower().strip()), "")
         }

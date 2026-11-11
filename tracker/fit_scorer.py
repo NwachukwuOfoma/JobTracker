@@ -39,7 +39,7 @@ DEALBREAKERS = {
     "internship": "Internship / co-op",
 }
 # Bump when the scoring instructions change in a way that should re-score every job
-SCORING_VERSION = "4"
+SCORING_VERSION = "6"
 
 # Backstops applied to the model's flags, since it sometimes flags a dealbreaker
 # ("Active TS/SCI clearance", "8+ years") without also listing it as one
@@ -68,7 +68,17 @@ REPORT_TOOL = {
         "type": "object",
         "properties": {
             "score": {"type": "integer", "description": "0-100 fit score."},
-            "note": {"type": "string", "description": "One short sentence (under 20 words): the strongest match and the biggest gap."},
+            "note": {"type": "string", "description": "Usually an empty string. Only for something no chip covers and worth knowing, under 12 words, e.g. 'Scored from title; description missing.' Never restate the chips or say that something isn't a dealbreaker."},
+            "strengths": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "1-3 strongest matches between the resume and the role's core work, 2-4 words each (never more), e.g. 'PyTorch + LLMs', 'MS in AI', 'Data pipelines'.",
+            },
+            "gaps": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Up to 3 soft gaps that lower the score but don't rule the candidate out, 2-4 words each (never more), e.g. 'Speech/audio focus', '1-3 years asked', 'Mid-level title', 'Java stack'. Not the hard requirements listed in flags. Empty if none.",
+            },
             "dealbreakers": {
                 "type": "array",
                 "items": {"type": "string", "enum": list(DEALBREAKERS)},
@@ -80,7 +90,7 @@ REPORT_TOOL = {
                 "description": "At most 3 hard requirements (stated as required, not preferred) the resume doesn't meet, 2-4 words each, e.g. 'Security clearance', 'US citizenship', '5+ years', 'PhD required'. Never skills, locations, nice-to-haves, or anything the candidate's other facts say they meet (such as citizenship). Empty if none.",
             },
         },
-        "required": ["score", "note", "dealbreakers", "flags"],
+        "required": ["score", "note", "strengths", "gaps", "dealbreakers", "flags"],
         "additionalProperties": False,
     },
 }
@@ -148,6 +158,8 @@ Score 0-100:
 - 0-39: poor match (different field, clearly senior, or hard requirements they lack).
 
 Weigh the role's actual work and required skills most. Treat "1-3 years" asks as soft: new grads with internships often get these roles, so dock only a few points. Required 4+ years, a required PhD, or a title clearly above entry level caps the score at 50. If the description is missing, score from the title and company and say so in the note.
+
+The dashboard shows strengths as green chips, gaps as yellow and flags as red, so put each point in a chip and keep the note for anything left over.
 
 Dealbreakers (only when the posting states them as hard requirements; "preferred", "a plus", "ability to obtain" or "eligible for" never count):
 - phd_required: a PhD (or MD) is required, not just preferred.
@@ -219,7 +231,7 @@ def _descriptions(jobs: List[Dict]) -> Dict[str, str]:
 def score_jobs(jobs: List[Dict]) -> Tuple[Dict[str, Dict], Optional[str]]:
     """
     Scores the given jobs against the newest resume. Returns ({normalized_url: {"score",
-    "note", "flags"}}, resume hash). Failed calls are left out and retried next fetch.
+    "note", "strengths", "gaps", "flags"}}, resume hash). Failed calls are left out and retried next fetch.
     Returns ({}, None) when there's no resume or API key.
     """
     resume, resume_hash, path = load_resume()

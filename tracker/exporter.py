@@ -486,6 +486,34 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
             border-radius: 6px;
         }}
 
+        .fit-chips {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.4rem;
+        }}
+
+        .strength-badge, .gap-badge {{
+            display: inline-flex;
+            align-items: center;
+            font-size: 0.72rem;
+            font-weight: 600;
+            padding: 0.15rem 0.5rem;
+            border-radius: 6px;
+        }}
+
+        .strength-badge {{
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.25);
+            color: #4ade80;
+        }}
+
+        .gap-badge {{
+            background: rgba(234, 179, 8, 0.1);
+            border: 1px solid rgba(234, 179, 8, 0.25);
+            color: #facc15;
+        }}
+
         .fit-note {{
             font-size: 0.78rem;
             color: var(--text-secondary);
@@ -1028,12 +1056,16 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                         const salaryBadge = job.salary
                             ? `<span class="salary-badge">💵 ${{escapeHtml(job.salary)}}</span>`
                             : `<a class="salary-ask" href="${{salarySearchUrl(job)}}" target="_blank" rel="noopener noreferrer" title="Search Google AI Mode for this role's salary">🔎 Ask AI about salary</a>`;
-                        let fitBadge = '', flagBadges = '', fitNote = '';
+                        let fitBadge = '', fitChips = '', fitNote = '';
                         if (job.fit_score !== null && job.fit_score !== undefined) {{
                             const tier = job.fit_score >= 70 ? 'fit-high' : (job.fit_score >= 45 ? 'fit-mid' : 'fit-low');
                             fitBadge = `<span class="fit-badge ${{tier}}" title="${{escapeHtml(job.fit_note || '')}}">🎯 Fit ${{job.fit_score}}</span>`;
-                            flagBadges = (job.fit_flags || '').split('; ').filter(Boolean)
-                                .map(f => `<span class="flag-badge" title="Requirement your resume doesn't show">🚩 ${{escapeHtml(f)}}</span>`).join('');
+                            const chips = (text, cls, icon, tip) => (text || '').split('; ').filter(Boolean)
+                                .map(f => `<span class="${{cls}}" title="${{tip}}">${{icon}} ${{escapeHtml(f)}}</span>`).join('');
+                            fitChips = chips(job.fit_strengths, 'strength-badge', '✓', 'Where your resume matches')
+                                + chips(job.fit_gaps, 'gap-badge', '△', "Soft gap: lowers the fit but doesn't rule you out")
+                                + chips(job.fit_flags, 'flag-badge', '🚩', "Requirement your resume doesn't show");
+                            if (fitChips) fitChips = `<div class="fit-chips">${{fitChips}}</div>`;
                             if (job.fit_note) fitNote = `<div class="fit-note">${{escapeHtml(job.fit_note)}}</div>`;
                         }}
                         const ageBadge = job.age ? `<span class="age-badge">📅 ${{escapeHtml(job.age)}}</span>` : '';
@@ -1061,8 +1093,8 @@ def generate_html(new_jobs: List[Dict[str, Any]], output_path: Path = BASE_DIR /
                                         ${{salaryBadge}}
                                         ${{ageBadge}}
                                         ${{warningBadge}}
-                                        ${{flagBadges}}
                                     </div>
+                                    ${{fitChips}}
                                     ${{fitNote}}
                                 </div>
                             </div>

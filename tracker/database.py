@@ -39,7 +39,7 @@ def init_db(db_path: Path = DB_PATH) -> None:
         cursor.execute("ALTER TABLE jobs ADD COLUMN duplicate_of TEXT")
     if "ai_salary_checked" not in existing_cols:
         cursor.execute("ALTER TABLE jobs ADD COLUMN ai_salary_checked INTEGER")
-    for col in ("fit_score INTEGER", "fit_note TEXT", "fit_flags TEXT", "fit_resume_hash TEXT"):
+    for col in ("fit_score INTEGER", "fit_note TEXT", "fit_flags TEXT", "fit_resume_hash TEXT", "fit_strengths TEXT", "fit_gaps TEXT"):
         if col.split()[0] not in existing_cols:
             cursor.execute(f"ALTER TABLE jobs ADD COLUMN {col}")
     # Descriptions live in their own table so loading every job stays light
@@ -274,14 +274,15 @@ def save_job_descriptions(descriptions: Dict[str, str], db_path: Path = DB_PATH)
     conn.close()
 
 def update_jobs_fit_bulk(fits: Dict[str, Dict[str, Any]], resume_hash: str, db_path: Path = DB_PATH) -> None:
-    """Saves fit scores ({url: {"score", "note", "flags"}}) and which resume version they were scored against."""
+    """Saves fit scores ({url: {"score", "note", "strengths", "gaps", "flags"}}) and which resume version they were scored against."""
     if not fits:
         return
     init_db(db_path)
     conn = sqlite3.connect(db_path)
     conn.executemany(
-        "UPDATE jobs SET fit_score = ?, fit_note = ?, fit_flags = ?, fit_resume_hash = ? WHERE normalized_url = ?",
-        [(f["score"], f["note"], "; ".join(f.get("dealbreaker_labels", []) + f["flags"]), resume_hash, url) for url, f in fits.items()],
+        "UPDATE jobs SET fit_score = ?, fit_note = ?, fit_flags = ?, fit_strengths = ?, fit_gaps = ?, fit_resume_hash = ? WHERE normalized_url = ?",
+        [(f["score"], f["note"], "; ".join(f.get("dealbreaker_labels", []) + f["flags"]),
+          "; ".join(f.get("strengths", [])), "; ".join(f.get("gaps", [])), resume_hash, url) for url, f in fits.items()],
     )
     conn.commit()
     conn.close()
